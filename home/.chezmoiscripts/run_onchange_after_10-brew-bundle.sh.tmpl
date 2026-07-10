@@ -1,0 +1,7 @@
+#!/bin/bash
+# Brewfile hash: {{ include "dot_Brewfile" | sha256sum }}
+set -eu
+eval "$(/opt/homebrew/bin/brew shellenv)"
+# ~/.zshenv の同名 export と同期を保つ（値を変えるときは両方）
+export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
+brew bundle --global

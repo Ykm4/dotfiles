@@ -1,0 +1,87 @@
+# ===========================================
+# Ghostty 設定ファイル
+# ===========================================
+
+# ----- テーマ -----
+theme = GitHub Dark
+# theme = Gruvbox Light
+
+# ----- フォント -----
+# 日本語フォールバック付き（英字はMonaspace Neon、日本語はヒラギノ角ゴシック）
+font-family = "Monaspace Neon"
+font-family = "Hiragino Kaku Gothic ProN"
+font-family-bold = "Monaspace Neon"
+font-family-bold = "Hiragino Kaku Gothic ProN"
+font-family-italic = "Monaspace Neon"
+font-family-italic = "Hiragino Kaku Gothic ProN"
+font-size = 12
+# 日本語表示の問題を避けるため無効化
+font-thicken = true
+
+# 日本語の全角文字を正しく表示するための設定
+adjust-cell-width = 0
+
+# ----- カーソル -----
+cursor-style = block
+cursor-style-blink = false
+
+# ----- ウィンドウ -----
+window-padding-x = 10
+window-padding-y = 10
+background-opacity = 0.95
+background-blur = 16
+
+# ----- macOS 固有 -----
+macos-titlebar-style = tabs
+macos-option-as-alt = true
+
+# ----- Quick Terminal -----
+keybind = global:cmd+grave_accent=toggle_quick_terminal
+quick-terminal-position = top
+
+# ----- セキュリティ -----
+clipboard-read = ask
+clipboard-paste-protection = true
+
+# ----- カスタムキーバインド -----
+keybind = cmd+shift+comma=reload_config
+keybind = cmd+plus=increase_font_size:1
+keybind = cmd+minus=decrease_font_size:1
+keybind = cmd+0=reset_font_size
+
+# shift+enterを改行扱いする
+keybind = shift+enter=text:\x1b\r
+
+# 起動時に前の作業フォルダを引き継ぐ（快適）
+window-save-state = always
+
+# ----- Claude Code 向け設定 -----
+
+# スクロールバック容量を拡張（50MB）
+# Claude Code は長いコード生成や差分表示を行うため、
+# デフォルトの 10MB では履歴が切れてしまうことがある
+scrollback-limit = 50000000
+
+# タイトルクエリ攻撃対策
+# 悪意のあるエスケープシーケンスによるタイトル取得を防止
+title-report = false
+
+# シェル統合を明示的に有効化
+# ディレクトリ継承（window-inherit-working-directory）が
+# 確実に動作するようにする
+shell-integration = zsh
+
+# 画面分割したときにpathが引き継がれる
+window-inherit-working-directory = true
+
+# 非アクティブ分割の不透明度（フォーカス位置が一目でわかる）
+unfocused-split-opacity = 0.5
+
+# ----- スプリット操作 -----
+
+# Claude Code とエディタを並べて作業するためのキーバインド
+# Cmd+Opt+矢印でスプリット間を移動
+keybind = cmd+opt+left=goto_split:left
+keybind = cmd+opt+right=goto_split:right
+keybind = cmd+opt+up=goto_split:top
+keybind = cmd+opt+down=goto_split:bottom

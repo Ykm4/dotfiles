@@ -1,0 +1,5 @@
+#!/bin/bash
+# duti settings hash: {{ include "dot_config/duti/settings" | sha256sum }}
+set -eu
+eval "$(/opt/homebrew/bin/brew shellenv)"
+duti "$HOME/.config/duti/settings"

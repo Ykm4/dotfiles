@@ -1,0 +1,81 @@
+[settings]
+# ツールインストール・タスク実行の最大並列数（デフォルト: 4）
+# npm系ツールが多いため、並列数を下げてリソース競合（signal 9）を回避
+jobs = 2
+
+[tools]
+# ============================================================
+# Node.js関連ツール
+# ============================================================
+node = "24"
+bun = "latest"
+pnpm = "latest"
+
+# @see https://geminicli.com/docs/get-started/installation/
+"npm:@google/gemini-cli" = "latest"
+
+# @see https://github.com/honojs/cli/blob/main/README.md#installation
+"npm:@hono/cli" = "latest"
+
+# @see https://github.com/vercel-labs/agent-browser
+"npm:agent-browser" = "latest"
+
+# @see https://github.com/microsoft/playwright-cli
+"npm:@playwright/cli" = "latest"
+
+# @see https://github.com/vercel-labs/skills
+"npm:skills" = "latest"
+
+# @see https://github.com/typescript-language-server/typescript-language-server
+# Claude Code の typescript-lsp プラグインが使用する Language Server
+"npm:typescript-language-server" = "latest"
+
+# ============================================================
+# Go関連ツール
+# ============================================================
+go = "1"
+
+# Cloudflare CLI
+"go:github.com/cloudflare/cloudflare-go/cmd/flarectl" = "latest"
+
+# ============================================================
+# データベースツール
+# ============================================================
+# @see https://www.mongodb.com/docs/mongodb-shell/
+mongosh = "latest"
+
+[tasks."brew:update"]
+description = "Update Homebrew and all formulae"
+run = "brew update && brew upgrade && brew upgrade --cask --greedy && brew cleanup"
+
+[tasks."brewfile:dump"]
+description = "Brewfile を再生成し mise 由来の go/npm 行を除去（後で chezmoi re-add ~/.Brewfile を忘れずに）"
+run = '''
+export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
+brew bundle dump --global --force
+sed -i '' -e '/^go "/d' -e '/^npm "/d' "$HOME/.Brewfile"
+echo "brew: $(grep -c '^brew ' "$HOME/.Brewfile") formula, $(grep -c '^cask ' "$HOME/.Brewfile") cask"
+'''
+
+[tasks."mise:upgrade"]
+description = "Upgrade all tools declared in [tools]"
+run = "mise upgrade"
+
+[tasks."textlint:update"]
+description = "Update textlint config (my-textlint-config) to latest main and reinstall"
+run = "cd ~/.config/textlint && bun update my-textlint-config"
+
+[tasks.textlint]
+description = "Lint files (Markdown, text, HTML, LaTeX, MDX) with my-textlint-config"
+dir = "{{cwd}}"
+quiet = true
+run = "$HOME/.config/textlint/node_modules/.bin/textlint --config $HOME/.config/textlint/node_modules/my-textlint-config/index.js --rules-base-directory $HOME/.config/textlint/node_modules"
+
+[tasks."tools:update"]
+description = "Update brew (incl. mise), mise tools, agent skills, and textlint (sequential)"
+run = [
+    { task = "brew:update" },
+    { task = "mise:upgrade" },
+    { task = "agent-skills:update" },
+    { task = "textlint:update" },
+]

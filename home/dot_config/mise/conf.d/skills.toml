@@ -1,0 +1,41 @@
+# ============================================================
+# Skills CLI Tasks (Agent Skills Manager)
+# @see https://github.com/vercel-labs/skills
+# ============================================================
+
+# インストール済みのグローバルスキル一覧
+[tasks."agent-skills:ls"]
+description = "List installed global skills"
+run = "skills ls -g"
+alias = "skls"
+
+# スキルの更新チェック
+[tasks."agent-skills:check"]
+description = "Check for available skill updates"
+run = "skills check"
+alias = "skck"
+
+# 全スキルを最新バージョンに更新（-g でグローバル限定、-y でスコーププロンプトをスキップ）
+[tasks."agent-skills:update"]
+description = "Update all installed agent skills"
+run = "skills update -g -y"
+alias = "skup"
+
+# スキルを検索（引数なしでインタラクティブ検索）
+[tasks."agent-skills:find"]
+description = "Search for skills (interactive or by keyword)"
+run = "skills find {{arg(name='query', default='')}}"
+alias = "skf"
+
+# スキルをグローバルにインストール
+# 例: mise run agent-skills:add cloudflare/skills -s wrangler
+[tasks."agent-skills:add"]
+description = "Add a skill package globally"
+run = "skills add {{arg(name='package')}} -g {{option(name='skill', short='s', default='')}}"
+alias = "ska"
+
+# スキルをグローバルから削除（引数なしでインタラクティブ選択）
+[tasks."agent-skills:remove"]
+description = "Remove installed skills globally"
+run = "skills remove -g {{arg(name='skill', default='')}}"
+alias = "skrm"

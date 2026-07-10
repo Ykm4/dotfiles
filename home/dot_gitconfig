@@ -1,0 +1,25 @@
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[user]
+	name = Ykm4
+	email = ykum4suke@gmail.com
+	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPAnTxCnV0LEohWxHFJqNLT5rG0Xy3B989xHCT7bapRz
+[core]
+	editor = vim -c \"set fenc=utf-8\"
+	ignorecase = false
+[pull]
+	rebase = false
+[color]
+	diff = auto
+	ui = true
+	branch = auto
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign
+	allowedSignersFile = ~/.config/git/allowed_signers
+[commit]
+	gpgsign = true

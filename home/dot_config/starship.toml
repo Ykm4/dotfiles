@@ -1,0 +1,83 @@
+# Get editor completions based on the config schema
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Inserts a blank line between shell prompts
+add_newline = true
+
+# Increase timeout for slow commands (e.g. mise shim)
+command_timeout = 1000
+
+# Replace the '❯' symbol in the prompt with '➜'
+[character] # The name of the module we are configuring is 'character'
+success_symbol = '[➜](bold green)' # The 'success_symbol' segment is being set to '➜' with the color 'bold green'
+
+# Disable the package module, hiding it from the prompt completely
+[package]
+disabled = true
+
+# ------------------------------------
+# Command duration
+# ------------------------------------
+[cmd_duration]
+min_time = 3000
+show_milliseconds = false
+format = '⏱ [$duration]($style) '
+
+# ------------------------------------
+# Directory
+# ------------------------------------
+[directory]
+truncation_length = 5
+truncate_to_repo = false
+
+# ------------------------------------
+# AWS
+# https://starship.rs/ja-JP/config/#aws
+# ------------------------------------
+[aws]
+disabled = true
+
+# ------------------------------------
+# gcloud
+# https://starship.rs/config/#google-cloud-gcloud
+# ------------------------------------
+[gcloud]
+format = '[$symbol$active]($style) '
+style = 'bold blue'
+
+# ------------------------------------
+# battery
+# https://starship.rs/ja-JP/config/#%E3%83%8F%E3%82%99%E3%83%83%E3%83%86%E3%83%AA%E3%83%BC
+# ------------------------------------
+[[battery.display]] # 'bold red' style and discharging_symbol when capacity is between 0% and 10%
+threshold = 10
+style = 'bold red'
+[[battery.display]] # 'bold yellow' style and 💦 symbol when capacity is between 10% and 30%
+threshold = 30
+style = 'bold yellow'
+
+# ------------------------------------
+# Docker
+# https://starship.rs/ja-JP/config/#docker-context
+# ------------------------------------
+# [docker_context]
+# format = 'via [🐋 $context](blue bold)'
+
+# ------------------------------------
+# Node.js
+# https://starship.rs/ja-JP/config/#node-js
+# ------------------------------------
+[nodejs]
+format = 'via [🤖 $version](bold green) '
+detect_files = ['package.json']
+detect_extensions = []
+
+
+# ------------------------------------
+# Time
+# https://starship.rs/ja-JP/config/#%E6%99%82%E5%88%BB
+# ------------------------------------
+[time]
+disabled = false
+format = '[$time]($style) '
+time_format = '%H:%M'

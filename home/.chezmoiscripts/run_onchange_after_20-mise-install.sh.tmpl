@@ -1,0 +1,5 @@
+#!/bin/bash
+# mise config hash: {{ include "dot_config/mise/config.toml" | sha256sum }}
+set -eu
+eval "$(/opt/homebrew/bin/brew shellenv)"
+mise install

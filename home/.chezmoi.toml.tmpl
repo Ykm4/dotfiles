@@ -1,0 +1,11 @@
+sourceDir = {{ .chezmoi.workingTree | quote }}
+
+[diff]
+    pager = "less -R"
+
+[edit]
+    command = "code"
+    args = ["--wait"]
+
+[hooks.read-source-state.pre]
+    command = "{{ .chezmoi.workingTree }}/scripts/ensure-prereqs.sh"

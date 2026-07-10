@@ -1,0 +1,5 @@
+# 1Password SSH エージェントが提示する鍵の許可リスト（記述順 = 提示順）。
+# ここに書いた鍵だけがエージェントに載る。名前のタイプミスはエラーにならず静かに外れる。
+[[ssh-keys]]
+item  = "git-signing"
+vault = "dotfiles"

@@ -1,0 +1,140 @@
+# ------------------------------------
+# Ghostty / cmux shell integration (split時にパスを引き継ぐために必要)
+# ------------------------------------
+if [[ -n $GHOSTTY_RESOURCES_DIR ]]; then
+  if [[ -f "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration" ]]; then
+    # Ghostty.app
+    source "$GHOSTTY_RESOURCES_DIR/shell-integration/zsh/ghostty-integration"
+  elif [[ -f "$GHOSTTY_RESOURCES_DIR/../shell-integration/cmux-zsh-integration.zsh" ]]; then
+    # cmux.app (シェル統合のパスが異なる)
+    source "$GHOSTTY_RESOURCES_DIR/../shell-integration/cmux-zsh-integration.zsh"
+  fi
+fi
+
+# ------------------------------------
+# basic
+# ------------------------------------
+export LANG=ja_JP.UTF-8
+setopt no_beep
+setopt nolistbeep
+
+# ヒストリ
+HISTFILE=~/.zsh_history
+HISTSIZE=100000
+SAVEHIST=100000
+
+zstyle ':completion:*:default' menu select=2
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+zstyle ':completion::complete:*' use-cache true
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+
+setopt share_history
+setopt hist_ignore_dups
+setopt hist_ignore_all_dups
+setopt hist_ignore_space
+setopt hist_reduce_blanks
+setopt complete_in_word
+
+# ------------------------------------
+# zinit（無ければ初回シェル起動時に自動インストール）
+# ------------------------------------
+if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
+    print -P "%F{33} %F{220}Installing %F{33}ZDHARMA-CONTINUUM%F{220} Initiative Plugin Manager (%F{33}zdharma-continuum/zinit%F{220})…%f"
+    command mkdir -p "$HOME/.local/share/zinit" && command chmod g-rwX "$HOME/.local/share/zinit"
+    command git clone https://github.com/zdharma-continuum/zinit "$HOME/.local/share/zinit/zinit.git" && \
+        print -P "%F{33} %F{34}Installation successful.%f%b" || \
+        print -P "%F{160} The clone has failed.%f%b"
+fi
+
+source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
+autoload -Uz _zinit
+(( ${+_comps} )) && _comps[zinit]=_zinit
+
+# プラグイン
+zinit light zsh-users/zsh-autosuggestions
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=250"
+zinit light zsh-users/zsh-completions
+zinit light zdharma-continuum/fast-syntax-highlighting
+
+# 補完初期化（プラグイン読み込み後に1回だけ）
+autoload -Uz compinit
+compinit
+zinit cdreplay -q
+
+# ------------------------------------
+# ツール初期化
+# ------------------------------------
+eval "$(starship init zsh)"
+eval "$(rbenv init - zsh)"
+eval "$(mise activate zsh)"
+source <(fzf --zsh)
+
+# ------------------------------------
+# PATH / 環境変数
+# ------------------------------------
+# pnpm（global bin: pnpm add -g の実体）
+export PNPM_HOME="$HOME/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+# bun（bun install -g / bun link の実体）
+case ":$PATH:" in
+  *":$HOME/.bun/bin:"*) ;;
+  *) export PATH="$HOME/.bun/bin:$PATH" ;;
+esac
+
+# ------------------------------------
+# gws multi-profile
+# ------------------------------------
+export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws/hucom-system"
+gws-profile() {
+  local profile="${1:-}"
+  if [[ -z "$profile" ]]; then
+    echo "gws profile: $(basename "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR")"
+  elif [[ -d "$HOME/.config/gws/$profile" ]]; then
+    export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws/$profile"
+    echo "gws profile: $profile"
+  else
+    echo "Unknown profile: $profile (available: $(command ls "$HOME/.config/gws" 2>/dev/null | tr '\n' ' '))" >&2
+    return 1
+  fi
+}
+
+# ------------------------------------
+# aliases
+# ------------------------------------
+if command -v eza >/dev/null 2>&1; then
+  alias ei="eza --icons --git"
+  alias ea="eza -a --icons --git"
+  alias ee="eza -aahl --icons --git"
+  alias et="eza -T -L 3 -a -I 'node_modules|.git|.cache' --icons"
+  alias eta="eza -T -a -I 'node_modules|.git|.cache' --color=always --icons | less -r"
+  alias ls=ei
+  alias la=ea
+  alias ll=ee
+  alias lt=et
+  alias lta=eta
+  alias l="clear && ls"
+fi
+
+alias lg='lazygit'
+alias g='git'
+alias gs='git status'
+alias gp='git pull'
+alias p="pnpm"
+alias now='date "+%Y-%m-%d %H:%M:%S"'
+
+# Apple Silicon のためコンテナのアーキテクチャを明示
+alias act='act --container-architecture linux/amd64'
+
+# ------------------------------------
+# direnv hook（PATH 変更の後に実行する）
+# ------------------------------------
+eval "$(direnv hook zsh)"
+
+# ------------------------------------
+# ローカル拡張（仕事用エイリアス等・chezmoi 管理外）
+# ------------------------------------
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
