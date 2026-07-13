@@ -24,7 +24,7 @@ chezmoi apply                                                # [3] 再適用で�
 
 ## 管理対象
 
-- Homebrew（`~/.Brewfile`）— formula・cask一式（1Passwordアプリ・CLIを含む）
+- Homebrew（`~/.Brewfile`）— formula・cask一式（1Passwordアプリ・CLIを含む）。手宣言で管理し`brew bundle dump`は使わない（乖離確認は`mise r brewfile:audit`）
 - zsh設定（`.zshrc`/`.zprofile`/`.zshenv`）
 - git設定（`.gitconfig`・`git/allowed_signers`・`git/ignore`）— コミット署名は1PasswordのSSHエージェント経由
 - gh（GitHub CLI）設定（`gh/private_config.yml`）

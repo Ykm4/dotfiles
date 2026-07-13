@@ -1,3 +1,5 @@
+# このファイルは手宣言で管理する。brew bundle dump で再生成しない。
+# 実機との乖離確認は mise r brewfile:audit（表示のみで変更は加えない）。
 tap "homebrew/services"
 tap "manaflow-ai/cmux", trusted: { casks: ["cmux"] }
 # Run your GitHub Actions locally

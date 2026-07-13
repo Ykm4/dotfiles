@@ -48,13 +48,14 @@ mongosh = "latest"
 description = "Update Homebrew and all formulae"
 run = "brew update && brew upgrade && brew upgrade --cask --greedy && brew cleanup"
 
-[tasks."brewfile:dump"]
-description = "Brewfile を再生成し mise 由来の go/npm 行を除去（後で chezmoi re-add ~/.Brewfile を忘れずに）"
+[tasks."brewfile:audit"]
+description = "Brewfile と実機の乖離を確認（cleanup dry-run + check。変更は加えない）"
 run = '''
 export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
-brew bundle dump --global --force
-sed -i '' -e '/^go "/d' -e '/^npm "/d' "$HOME/.Brewfile"
-echo "brew: $(grep -c '^brew ' "$HOME/.Brewfile") formula, $(grep -c '^cask ' "$HOME/.Brewfile") cask"
+echo "== 未宣言でインストール済み（削除候補） =="
+brew bundle cleanup --global || true
+echo "== 宣言済みで未インストール =="
+brew bundle check --global --verbose || true
 '''
 
 [tasks."mise:upgrade"]
