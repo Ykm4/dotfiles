@@ -33,7 +33,6 @@ chezmoi apply                                                # [3] 再適用で�
 - ghostty・starship・mise・dutiの各設定
 - gcloudのconfigurationファイル（`hucom-system`・`personal`の2プロファイル。account・projectの値は1Passwordから注入）
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
-- Cloudflare APIトークンのテンプレート（値は1Passwordから注入）
 - miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
 - Claude Codeのユーザー設定（`~/.claude`のsettings.json・keybindings・statusline・rules・scripts・公開可能なskills。settings.jsonの`enabledPlugins`がプラグインの宣言、user スコープMCPは`run_onchange`スクリプトで登録）
 
@@ -54,7 +53,7 @@ chezmoiのテンプレートが参照するのは`dotfiles` Vaultのみである
 
 - `dotfiles` Vault
   - item `identity` — gcloudのaccount・project（`hucom-system`・`personal`の各プロファイル分）
-  - item `cloudflare` — Cloudflare APIトークン
+  - item `mise-secrets` — miseのsecrets.tomlに注入する値（APIキー・取引先envパス）
   - item `gws-client-secret` — Google Workspace APIのclient secret（`hucom-system`・`personal`の各プロファイル分）
   - item `git-signing` — コミット署名用SSH鍵（1PasswordのSSHエージェント経由でのみ使用し、秘密鍵はディスクに書き出さない）
 - そのほかのVault（個人用・自社用・取引先ごとのVault）は本リポジトリのテンプレートからは参照しない。
