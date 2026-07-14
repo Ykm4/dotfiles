@@ -164,5 +164,7 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true
+  "skipAutoPermissionPrompt": true,
+  "cleanupPeriodDays": 20,
+  "awaySummaryEnabled": true
 }
