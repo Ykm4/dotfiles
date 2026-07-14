@@ -35,7 +35,7 @@ chezmoi apply                                                # [3] 再適用で�
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
 - Cloudflare APIトークンのテンプレート（値は1Passwordから注入）
 - miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
-- Claude Codeのユーザー設定（`~/.claude`のkeybindings・statusline・rules・commands・scripts・公開可能なskills。非公開分はprivateリポジトリ側）
+- Claude Codeのユーザー設定（`~/.claude`のkeybindings・statusline・rules・scripts・公開可能なskills。非公開分はprivateリポジトリ側）
 
 ## 管理対象外・復元手順
 
