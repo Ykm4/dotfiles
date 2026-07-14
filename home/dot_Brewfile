@@ -48,8 +48,6 @@ brew "imagemagick"
 brew "jq"
 # Simple terminal UI for git commands
 brew "lazygit"
-# Run LogQL queries against a Loki server
-brew "logcli"
 # Polyglot runtime manager (asdf rust clone)
 brew "mise"
 # Process manager for Procfile-based applications and tmux
