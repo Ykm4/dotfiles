@@ -34,6 +34,7 @@ chezmoi apply                                                # [3] 再適用で�
 - gcloudのconfigurationファイル（`hucom-system`・`personal`の2プロファイル。account・projectの値は1Passwordから注入）
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
 - Cloudflare APIトークンのテンプレート（値は1Passwordから注入）
+- miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
 
 ## 管理対象外・復元手順
 
