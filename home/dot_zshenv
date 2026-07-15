@@ -23,3 +23,7 @@ esac
 # brew bundle --global の対象を ~/.Brewfile に固定（Homebrew 6 は ~/.homebrew/Brewfile を優先するため）
 # （.chezmoiscripts/run_onchange_after_10-brew-bundle.sh.tmpl 内の同名 export と同期を保つ）
 export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
+
+# homebrew-core の bottle のビルド来歴（provenance attestation）を gh で検証してからインストールする
+# 対象は core formula の新規ダウンロードのみ（cask は対象外）。オフライン時は新規インストールが失敗する点に注意
+export HOMEBREW_VERIFY_ATTESTATIONS=1
