@@ -31,6 +31,7 @@ chezmoi apply                                                # [3] 再適用で�
 - SSHクライアント設定（`.ssh/config`）— `IdentityAgent`を1PasswordのSSHエージェントに固定
 - 1Password SSHエージェントの鍵許可リスト（`1Password/ssh/agent.toml`）— エージェントに載せる鍵をここで明示的に絞る。
 - ghostty・starship・mise・dutiの各設定
+- Finicky設定（`~/.finicky.js`）— リンクをURLパターンごとにブラウザ・プロファイルへ振り分ける（既定はArc、Claude関連はChromeの個人プロファイル）
 - gcloudのconfigurationファイル（`hucom-system`・`personal`の2プロファイル。account・projectの値は1Passwordから注入）
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
 - miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
@@ -46,6 +47,7 @@ chezmoi apply                                                # [3] 再適用で�
 - Claude Codeの非公開設定（`CLAUDE.md`・`settings.json`・一部skills）をprivateリポジトリから復元する: `cd ~/.claude && git init -b master && git remote add origin git@github.com:Ykm4/claude-global-config.git && git fetch origin && git checkout master`
 - シンボリックリンク型のskills（`~/.agents/skills/`参照）は`skills` CLI（mise管理の`npm:skills`）で再インストールし、依存を持つskillは各ディレクトリで`bun install`する（現状はskill-lintのみ）。
 - Claude Codeのプラグインはmarketplaceから再インストールする。
+- Finickyを一度起動し、macOSの既定ブラウザに設定する（OSの確認ダイアログで承認する。ブラウザの振り分けルールは`~/.finicky.js`が担う）。
 
 ## 1Password の Vault/item 構成（値は非掲載）
 

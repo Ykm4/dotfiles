@@ -90,6 +90,8 @@ cask "copilot-cli"
 cask "dbeaver-community"
 # Voice and text chat software
 cask "discord"
+# Utility for customizing which browser to start
+cask "finicky"
 cask "font-jetbrains-mono-nerd-font"
 cask "font-monaspace"
 # Set of tools to manage resources and applications hosted on Google Cloud
