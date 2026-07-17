@@ -56,6 +56,7 @@ chezmoi apply                                                # [3] 再適用で�
 - シンボリックリンク型のskills（`~/.agents/skills/`参照）は`skills` CLI（mise管理の`npm:skills`）で再インストールする。依存を持つskillは各ディレクトリで`bun install`する（現状はskill-lintのみ）。
 - Claude Codeのプラグインはmarketplaceから再インストールする。
 - Finickyを一度起動し、macOSの既定ブラウザに設定する（OSの確認ダイアログで承認する。ブラウザの振り分けルールは`~/.finicky.js`が担う）。
+- colimaのVMを初回起動時にリソース指定で作成する: `colima start --cpu 6 --memory 6 --disk 100`（既定値のままVMを作った場合は`colima delete`後に再作成する）。
 
 ## 1Password の Vault/item 構成（値は非掲載）
 
