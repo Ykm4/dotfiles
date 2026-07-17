@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#MISE description="Finicky のルーティングを dry-run で検証する（ブラウザは開かない）"
+# Finicky を --dry-run で起動し、テスト URL の評価結果をログで検証する。
+# dry-run では最終的な open コマンドが実行されないため、敵対的なテスト URL も安全に流せる。
+# 取引先の識別子はこのスクリプトに書かない。検証は公開可能な不変条件のみで行う。
+set -u
+
+FINICKY_BIN="/Applications/Finicky.app/Contents/MacOS/Finicky"
+LOG="$(mktemp -t finicky-verify)"
+PASS=0
+FAIL=0
+
+[[ -x "$FINICKY_BIN" ]] || { echo "Finicky.app が見つからない"; exit 1; }
+
+cleanup() {
+  pkill -x Finicky 2>/dev/null || true
+  sleep 1
+  /usr/bin/open -a Finicky # 通常起動に戻す
+}
+trap cleanup EXIT
+
+pkill -x Finicky 2>/dev/null || true
+sleep 1
+nohup "$FINICKY_BIN" --dry-run >"$LOG" 2>&1 &
+
+for _ in $(seq 1 20); do
+  grep -q "Listening for events" "$LOG" && break
+  sleep 0.5
+done
+grep -q "Listening for events" "$LOG" || { echo "Finicky (dry-run) が起動しない"; tail -5 "$LOG"; exit 1; }
+if grep -qiE "error while running config|failed to (setup|get|validate)" "$LOG"; then
+  echo "設定の読み込みエラー:"
+  tail -5 "$LOG"
+  exit 1
+fi
+
+# check <説明> <URL> <ログに現れるべきパターン(grep -E)>
+check() {
+  local desc="$1" url="$2" expect="$3"
+  local before delta
+  before=$(wc -l <"$LOG")
+  /usr/bin/open "$url"
+  for _ in $(seq 1 20); do
+    delta=$(tail -n +"$((before + 1))" "$LOG")
+    grep -q "Would run command" <<<"$delta" && break
+    sleep 0.3
+  done
+  if grep -qE "$expect" <<<"$delta"; then
+    echo "PASS  $desc"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL  $desc"
+    grep -E "URL received|Starting browser|Would run" <<<"$delta" | tail -3 | sed 's/^/      /'
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# ---- 敵対的ケース: 既定（Arc）に落ちること ----
+check "パス偽装は既定に落ちる" \
+  "https://evil.example/x.github.com/a" 'Would run command.*open -a Arc '
+check "DNS ラベル境界（notzoom.us を Zoom 扱いしない）" \
+  "https://notzoom.us/j/12345" 'Would run command.*open -a Arc '
+check "prototype 汚染キーを GCP project と誤認しない" \
+  "https://console.cloud.google.com/home?project=constructor" 'Would run command.*open -a Arc '
+
+# ---- 正常系: 公開可能な値だけで断定する ----
+check "github.com は Chrome のプロファイル付きで開く" \
+  "https://github.com/" "Would run command.*'Google Chrome' -n --args '--profile-directory="
+check "admin.google.com は自社プロファイルで開く" \
+  "https://admin.google.com/" 'Found profile by name","name":"hucomsystem"'
+check "GCP の自社 project は自社プロファイルで開く" \
+  "https://console.cloud.google.com/home?project=hucomsystem-gws" 'Found profile by name","name":"hucomsystem"'
+check "トラッキングパラメータが除去される" \
+  "https://github.com/?utm_source=verify&gclid=x" 'Starting browser.*"url":"https://github.com/"'
+
+# ---- deep link: アプリ導入時のみルールが存在する ----
+if [[ -d "/Applications/zoom.us.app" ]]; then
+  check "Zoom 招待リンクは zoommtg:// に変換される" \
+    "https://zoom.us/j/1234567890?pwd=abc" 'Would run command.*zoommtg://zoom.us/join\?confno=1234567890'
+fi
+if [[ -d "/Applications/Slack.app" ]]; then
+  check "Slack の app.slack.com リンクは slack:// に変換される" \
+    "https://app.slack.com/client/T0TEST123/C0TEST456/1234.5678" 'Would run command.*slack://channel\?team=T0TEST123&id=C0TEST456&message=1234.5678'
+fi
+
+echo
+echo "結果: PASS=${PASS} FAIL=${FAIL}"
+[[ "$FAIL" -eq 0 ]]

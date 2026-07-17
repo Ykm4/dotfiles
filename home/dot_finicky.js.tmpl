@@ -1,0 +1,187 @@
+{{- /* 1Password から注入する取引先識別子。空・欠落なら apply を止める（無防備な素通しを防ぐ） */ -}}
+{{- $hasSlack := stat "/Applications/Slack.app" -}}
+{{- $hasZoom := stat "/Applications/zoom.us.app" -}}
+{{- $hasTeams := or (stat "/Applications/Microsoft Teams.app") (stat "/Applications/Microsoft Teams (work or school).app") -}}
+{{- $f := dict
+  "profilePartnerA" (onepasswordRead "op://dotfiles/identity/finicky-profile-partner-a")
+  "profilePartnerB" (onepasswordRead "op://dotfiles/identity/finicky-profile-partner-b")
+  "domainPartnerA" (onepasswordRead "op://dotfiles/identity/finicky-domain-partner-a")
+  "domainPartnerB" (onepasswordRead "op://dotfiles/identity/finicky-domain-partner-b")
+  "gcpProjectPartnerA" (onepasswordRead "op://dotfiles/identity/finicky-gcp-project-partner-a")
+-}}
+{{- if $hasSlack -}}
+{{- $_ := set $f "slackSubdomainPartnerB" (onepasswordRead "op://dotfiles/identity/finicky-slack-subdomain-partner-b") -}}
+{{- $_ := set $f "slackTeamPartnerB" (onepasswordRead "op://dotfiles/identity/finicky-slack-team-partner-b") -}}
+{{- end -}}
+{{- range $key, $value := $f }}{{ if not $value }}{{ fail (printf "1Password の identity に finicky 用フィールドが不足または空: %s" $key) }}{{ end }}{{ end -}}
+// Finicky (https://github.com/johnste/finicky) の設定
+// Finicky を macOS の既定ブラウザにし、リンクを対応表に従って開くブラウザ・プロファイルへ振り分ける。
+// Slack / Zoom / Teams のリンクは deep link に変換してアプリで直接開く（アプリ導入済みのときだけ chezmoi が有効化する）。
+// esbuild (Target: ES2015) で変換されるため現代的な構文を使える。url は標準 URL 互換で searchParams が使える。
+// 取引先の識別子（プロファイル名・ドメイン・GCP プロジェクト・Slack team）は 1Password から注入する（gcloud 設定と同じ方式）。
+
+/** @typedef {import("/Applications/Finicky.app/Contents/Resources/finicky.d.ts").FinickyConfig} FinickyConfig */
+
+// ---- 振り分け先（Chrome のプロファイル表示名。Chrome 側で名前を変更したらここも合わせる） ----
+
+/** @param {string} profile */
+const chrome = (profile) => ({ name: "Google Chrome", profile });
+
+const personal = chrome("ykum4suke"); // 個人
+const hucomSystem = chrome("hucomsystem"); // 自社
+const partnerA = chrome({{ $f.profilePartnerA | toJson }}); // 取引先A
+const partnerB = chrome({{ $f.profilePartnerB | toJson }}); // 取引先B
+
+// ---- 振り分けルール（ドメイン → プロファイルの対応表。行を足すだけでルールが増える） ----
+// 各ドメインは apex と全サブドメインの両方にマッチする。表にない URL は既定（Arc）で開く。
+
+const domainRoutes = {
+  // Claude 関連（デスクトップアプリの認証を含む）と GitHub は個人アカウントで一元管理している
+  "claude.ai": personal,
+  "anthropic.com": personal,
+  "github.com": personal,
+
+  // AWS（コンソール・SSO・署名付き URL）を使う作業は取引先Bのみ
+  "aws.amazon.com": partnerB,
+  "awsapps.com": partnerB,
+  "amazonaws.com": partnerB,
+
+  // Google Workspace 管理コンソールは自社を既定にする（取引先A側の管理時は手動でプロファイル切替）
+  "admin.google.com": hucomSystem,
+
+  // 自社・取引先のドメイン
+  "hucomsystem.com": hucomSystem,
+  {{ $f.domainPartnerA | toJson }}: partnerA,
+  {{ $f.domainPartnerB | toJson }}: partnerB,
+};
+
+// GCP Console は URL の ?project= で振り分ける（gcloud configuration の 3 プロファイルと同じ）
+const gcpProjectRoutes = new Map([
+  ["hucomsystem-gws", hucomSystem],
+  [{{ $f.gcpProjectPartnerA | toJson }}, partnerA],
+  ["personal-gws-493507", personal],
+]);
+{{- if $hasSlack }}
+
+// ---- Slack のワークスペース対応表（サブドメイン → team ID） ----
+// 対応表にあるワークスペースの permalink は slack:// に変換して Slack アプリで開く。
+// 追加手順: 1Password の identity に finicky-slack-subdomain-* / finicky-slack-team-* を作り、op 参照で注入する。
+// team ID はブラウザ版 Slack の URL（app.slack.com/client/T.../...）で確認できる。
+const slackTeams = new Map([
+  [{{ $f.slackSubdomainPartnerB | toJson }}, {{ $f.slackTeamPartnerB | toJson }}], // 取引先B
+]);
+{{- end }}
+
+// ---- 除去するトラッキングパラメータ（公式 wiki のレシピと同じ「完全一致 + 前方一致」の 2 段構え） ----
+// si・ref などサイト機能に使われ得るパラメータは、誤動作防止のため対象外にしている。
+
+const removeExactParams = new Set([
+  "fbclid", "gclid", "wbraid", "gbraid", "dclid",
+  "msclkid", "twclid", "igshid", "mc_eid", "mc_cid",
+]);
+const removeParamPrefixes = ["utm_"];
+
+// ---- ここから下は仕組み（表を編集するだけなら触る必要はない） ----
+
+/** @param {string} key */
+const isTrackingParam = (key) =>
+  removeExactParams.has(key) || removeParamPrefixes.some((prefix) => key.startsWith(prefix));
+
+// ホスト名を DNS ラベル境界で照合する。Finicky の文字列ワイルドカードは URL 全体（href）に
+// マッチするためパス偽装（例: evil.example/x.github.com/a）を弾けず、ここでは使わない。
+/** @param {URL} url @param {string} host */
+const isHost = (url, host) => url.hostname === host || url.hostname.endsWith(`.${host}`);
+
+/** @param {URL} url */
+const gcpBrowser = (url) => gcpProjectRoutes.get(url.searchParams.get("project"));
+{{- if $hasSlack }}
+
+// Slack の permalink を slack:// に変換する。
+// 対象はチャンネル・メッセージのリンクのみで、ファイルやプロフィールのリンクはブラウザで開く。
+/** @param {URL} url */
+const slackDeepLink = (url) => {
+  if (url.hostname === "app.slack.com") {
+    const m = url.pathname.match(/^\/client\/(\w+)\/(\w+)(?:\/([\d.]+))?$/);
+    if (!m) return url;
+    return new URL(`slack://channel?team=${m[1]}&id=${m[2]}${m[3] ? `&message=${m[3]}` : ""}`);
+  }
+  const team = slackTeams.get(url.hostname.replace(/\.slack\.com$/, ""));
+  const m = url.pathname.match(/^\/(?:messages|archives)\/(\w+)(?:\/p(\d+))?\/?$/);
+  if (!team || !m) return url;
+  const message = m[2] ? `&message=${m[2].slice(0, 10)}.${m[2].slice(10)}` : "";
+  return new URL(`slack://channel?team=${team}&id=${m[1]}${message}`);
+};
+{{- end }}
+{{- if $hasZoom }}
+
+// Zoom の招待リンクを zoommtg:// に変換する（会議番号とパスコードを引き継ぐ）。
+/** @param {URL} url */
+const zoomDeepLink = (url) => {
+  const m = url.pathname.match(/^\/j\/(\d+)\/?$/);
+  if (!m) return url;
+  const deepLink = new URL(`zoommtg://${url.hostname}/join`);
+  deepLink.searchParams.set("confno", m[1]);
+  const pwd = url.searchParams.get("pwd");
+  if (pwd) deepLink.searchParams.set("pwd", pwd);
+  return deepLink;
+};
+{{- end }}
+
+/** @type {FinickyConfig} */
+export default {
+  defaultBrowser: "Arc",
+
+  rewrite: [
+    {
+      // トラッキングパラメータを除去してから振り分けへ進む（該当なしなら URL を無変更で返す）。
+      match: () => true,
+      url: (url) => {
+        for (const key of Array.from(url.searchParams.keys())) {
+          if (isTrackingParam(key)) url.searchParams.delete(key);
+        }
+        return url;
+      },
+    },
+{{- if $hasSlack }}
+    // Slack の permalink をアプリの deep link へ変換する
+    { match: (url) => isHost(url, "slack.com"), url: slackDeepLink },
+{{- end }}
+{{- if $hasZoom }}
+    // Zoom の招待リンクをアプリの deep link へ変換する
+    { match: (url) => isHost(url, "zoom.us"), url: zoomDeepLink },
+{{- end }}
+{{- if $hasTeams }}
+    // Teams のリンクをアプリの deep link へ変換する
+    {
+      match: (url) => url.hostname === "teams.microsoft.com" && url.pathname.startsWith("/l/"),
+      url: (url) => new URL(`msteams://${url.hostname}${url.pathname}${url.search}`),
+    },
+{{- end }}
+  ],
+
+  // handlers は上から順に評価され、最初にマッチしたルールが適用される（先勝ち）。
+  handlers: [
+{{- if $hasSlack }}
+    // deep link に変換された Slack リンクはアプリで開く
+    { match: (url) => url.protocol === "slack:", browser: "Slack" },
+{{- end }}
+{{- if $hasZoom }}
+    // deep link に変換された Zoom リンクはアプリで開く
+    { match: (url) => url.protocol === "zoommtg:", browser: "us.zoom.xos" },
+{{- end }}
+{{- if $hasTeams }}
+    // deep link に変換された Teams リンクはアプリで開く（bundle ID は新旧 Teams で異なるためアプリ名で指定）
+    { match: (url) => url.protocol === "msteams:", browser: "Microsoft Teams" },
+{{- end }}
+    {
+      // GCP Console の project 別振り分け（ドメイン対応表より優先）
+      match: (url) => url.hostname === "console.cloud.google.com" && Boolean(gcpBrowser(url)),
+      browser: gcpBrowser,
+    },
+    // ドメイン対応表から生成
+    ...Object.entries(domainRoutes).map(([host, browser]) => ({
+      match: (url) => isHost(url, host),
+      browser,
+    })),
+  ],
+};

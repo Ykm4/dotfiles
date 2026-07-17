@@ -31,11 +31,14 @@ chezmoi apply                                                # [3] 再適用で�
 - SSHクライアント設定（`.ssh/config`）— `IdentityAgent`を1PasswordのSSHエージェントに固定
 - 1Password SSHエージェントの鍵許可リスト（`1Password/ssh/agent.toml`）— エージェントに載せる鍵をここで明示的に絞る。
 - ghostty・starship・mise・dutiの各設定
-- Finicky設定（`~/.finicky.js`）— リンクをURLパターンごとにブラウザ・プロファイルへ振り分ける（既定はArc、Claude関連はChromeの個人プロファイル）
+- Finicky設定（`~/.finicky.js`）— リンクを対応表に従いブラウザ・プロファイルへ振り分け、Slack/Zoom/Teamsはdeep linkでアプリ起動（既定はArc）。取引先の識別子（プロファイル名・ドメイン・GCPプロジェクト）は1Passwordから注入。検証は`mise r finicky:verify`（dry-runでブラウザを開かずに全経路を確認する）。
+- cmux設定（`~/.config/cmux/cmux.json`）— ターミナル内`open`の横取りを無効化しFinicky経由に統一。変更後は`cmux reload-config`で反映
+- lazygit設定（`~/.config/lazygit/config.yml`）— macOSの既定パスは`~/Library/Application Support`のため`.zshenv`の`LG_CONFIG_FILE`でXDGパスを参照させる
+- Codex CLI設定の雛形（`~/.codex/config.toml`）— `create_`方式で初回のみ生成。以後はCodex自身がtrust情報等を追記するため管理外で育てる（取引先パス・取引先MCPは雛形に含めない）
 - gcloudのconfigurationファイル（`hucom-system`・`personal`の2プロファイル。account・projectの値は1Passwordから注入）
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
 - miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
-- Claude Codeのユーザー設定（`~/.claude`のsettings.json・keybindings・statusline・rules・scripts・公開可能なskills。settings.jsonの`enabledPlugins`がプラグインの宣言、user スコープMCPは`run_onchange`スクリプトで登録）
+- Claude Codeのユーザー設定（`~/.claude`のsettings.json・keybindings・statusline・rules・scripts・公開可能なskills）。settings.jsonの`enabledPlugins`がプラグインの宣言、userスコープMCPは`run_onchange`スクリプトで登録する。
 
 ## 管理対象外・復元手順
 
@@ -44,8 +47,13 @@ chezmoi apply                                                # [3] 再適用で�
 - `gh auth login`・プロファイルごとの`gws auth login`・`gcloud auth login`を再実行する。
 - `~/.zshrc.local`・`~/.ssh/config.local`を旧マシンから手動で移送する（chezmoi管理外のローカル拡張）。
 - 取引先スコープの設定は、1Passwordの取引先用Vaultから`op read`で手動復元する。
-- Claude Codeの非公開設定（`CLAUDE.md`・`settings.json`・一部skills）をprivateリポジトリから復元する: `cd ~/.claude && git init -b master && git remote add origin git@github.com:Ykm4/claude-global-config.git && git fetch origin && git checkout master`
-- シンボリックリンク型のskills（`~/.agents/skills/`参照）は`skills` CLI（mise管理の`npm:skills`）で再インストールし、依存を持つskillは各ディレクトリで`bun install`する（現状はskill-lintのみ）。
+- Claude Codeの非公開設定（`CLAUDE.md`・`settings.json`・一部skills）をprivateリポジトリから復元する。
+
+  ```bash
+  cd ~/.claude && git init -b master && git remote add origin git@github.com:Ykm4/claude-global-config.git && git fetch origin && git checkout master
+  ```
+
+- シンボリックリンク型のskills（`~/.agents/skills/`参照）は`skills` CLI（mise管理の`npm:skills`）で再インストールする。依存を持つskillは各ディレクトリで`bun install`する（現状はskill-lintのみ）。
 - Claude Codeのプラグインはmarketplaceから再インストールする。
 - Finickyを一度起動し、macOSの既定ブラウザに設定する（OSの確認ダイアログで承認する。ブラウザの振り分けルールは`~/.finicky.js`が担う）。
 
@@ -54,7 +62,7 @@ chezmoi apply                                                # [3] 再適用で�
 chezmoiのテンプレートが参照するのは`dotfiles` Vaultのみである。
 
 - `dotfiles` Vault
-  - item `identity` — gcloudのaccount・project（`hucom-system`・`personal`の各プロファイル分）
+  - item `identity` — gcloudのaccount・project（`hucom-system`・`personal`の各プロファイル分）とFinicky用の取引先識別子。Finicky用は`finicky-profile/domain/gcp-project-partner-*`、Slack導入時は`finicky-slack-subdomain/team-partner-*`も必須
   - item `mise-secrets` — miseのsecrets.tomlに注入する値（APIキー・取引先envパス）
   - item `gws-client-secret` — Google Workspace APIのclient secret（`hucom-system`・`personal`の各プロファイル分）
   - item `git-signing` — コミット署名用SSH鍵（1PasswordのSSHエージェント経由でのみ使用し、秘密鍵はディスクに書き出さない）
