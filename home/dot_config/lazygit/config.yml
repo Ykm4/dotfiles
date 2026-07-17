@@ -1,0 +1,22 @@
+# lazygit の設定（リファレンス: https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md）
+# macOS の既定パスは ~/Library/Application Support/lazygit のため、.zshenv の LG_CONFIG_FILE でこのファイルを読ませている。
+gui:
+  # Nerd Fonts v3 のアイコンを表示する（JetBrains Mono Nerd Font 前提）
+  nerdFontsVersion: "3"
+  # 起動時のランダム Tip を表示しない
+  showRandomTip: false
+git:
+  # 1Password の SSH 署名は TTY 不要のため、コミット時の全画面サブプロセス切替を省く。
+  # ターミナル内 pinentry を使う本来の GPG に戻す場合は false にする。
+  overrideGpg: true
+  commit:
+    # コミット本文の 72 桁での機械折返しを無効化する（日本語の本文が文の途中で切られるため）
+    autoWrapCommitMessage: false
+os:
+  # e キーでのファイル編集を VS Code で開く（未指定だと core.editor の vim に推測される）
+  editPreset: "vscode"
+update:
+  # 更新は brew で管理するため、アプリ内のアップデート確認を無効化する
+  method: "never"
+# 起動時のポップアップ（チュートリアル等）を表示しない
+disableStartupPopups: true

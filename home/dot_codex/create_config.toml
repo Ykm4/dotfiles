@@ -1,0 +1,39 @@
+# Codex CLI のユーザー設定（リファレンス: https://developers.openai.com/codex/config-reference）
+# chezmoi は初回のみこのファイルを生成する（create_ 方式）。以後は Codex 自身が [projects]（trust 情報）や
+# [notice]・[tui.model_availability_nux] 等の実行時状態を追記して育てるため、既存ファイルには干渉しない。
+# 雛形を変えたときの既存マシンへの反映は手動で行う。取引先固有のパス・MCP はこの雛形に書かない。
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+plan_mode_reasoning_effort = "high"
+
+# 更新は brew（cask）で管理するため、起動時のアップデート確認を抑止する。
+# 対話プロンプトが codex exec（codex-bridge）をタイムアウトさせるのを防ぐ目的もある。
+check_for_update_on_startup = false
+
+# テレメトリを送らない
+[analytics]
+enabled = false
+
+# 重い解析用: codex exec --profile deep で切替（旗艦モデル + 最大推論）
+[profiles.deep]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "ultra"
+
+# 非対話ブリッジ用: 承認待ちで止まらない読み取り専用実行
+[profiles.bridge]
+sandbox_mode = "read-only"
+approval_policy = "never"
+
+# 公開サービスの MCP（API キーは環境変数名の参照に留め、値を書かない）
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+
+[mcp_servers.context7.env_http_headers]
+CONTEXT7_API_KEY = "CONTEXT7_API_KEY"
+
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "current-dir", "model-name", "context-used", "five-hour-limit", "codex-version", "context-window-size", "used-tokens"]
+
+[tui.keymap.editor]
+insert_newline = ["shift-enter", "alt-enter"]
