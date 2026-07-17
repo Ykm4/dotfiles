@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
+  "schemaVersion": 1,
+  // ここに書いた設定はファイル管理となり Settings ウィンドウより優先される。全キーは `cmux docs settings` で確認できる。
+  // 変更後は `cmux reload-config` で再起動なしに反映される。
+
+  "app": {
+    // 匿名テレメトリを送らない。
+    "sendAnonymousTelemetry": false
+  },
+
+  "browser": {
+    // ターミナル内の open コマンドを cmux 内ブラウザで横取りしない（URL は既定ブラウザの Finicky 経由で開く）。
+    "interceptTerminalOpenCommandInCmuxBrowser": false
+  },
+
+  "sidebar": {
+    // サイドバーの PR リンクも Finicky 経由にして、github.com の振り分けルール（Chrome 個人）と一貫させる。
+    "openPullRequestLinksInCmuxBrowser": false
+  },
+
+  "terminal": {
+    // アイドルなエージェント端末を休止してメモリを節約する（フォーカスで復帰する）。
+    "agentHibernation": {
+      "enabled": true,
+      "idleSeconds": 3600,
+      "maxLiveTerminals": 12
+    }
+  }
+}
