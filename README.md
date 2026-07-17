@@ -30,7 +30,7 @@ chezmoi apply                                                # [3] 再適用で�
 - gh（GitHub CLI）設定（`gh/private_config.yml`）
 - SSHクライアント設定（`.ssh/config`）— `IdentityAgent`を1PasswordのSSHエージェントに固定
 - 1Password SSHエージェントの鍵許可リスト（`1Password/ssh/agent.toml`）— エージェントに載せる鍵をここで明示的に絞る。
-- ghostty・starship・mise・dutiの各設定
+- ghostty・starship・mise・duti・bat・direnvの各設定
 - Finicky設定（`~/.finicky.js`）— リンクを対応表に従いブラウザ・プロファイルへ振り分け、Slack/Zoom/Teamsはdeep linkでアプリ起動（既定はArc）。取引先の識別子（プロファイル名・ドメイン・GCPプロジェクト）は1Passwordから注入。検証は`mise r finicky:verify`（dry-runでブラウザを開かずに全経路を確認する）。
 - cmux設定（`~/.config/cmux/cmux.json`）— ターミナル内`open`の横取りを無効化しFinicky経由に統一。変更後は`cmux reload-config`で反映
 - lazygit設定（`~/.config/lazygit/config.yml`）— macOSの既定パスは`~/Library/Application Support`のため`.zshenv`の`LG_CONFIG_FILE`でXDGパスを参照させる

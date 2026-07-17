@@ -1,0 +1,11 @@
+# bat の設定（リファレンス: https://github.com/sharkdp/bat#configuration-file）
+# 形式はコマンドライン引数の列挙。雛形は bat --generate-config-file で生成できる。
+
+# ダーク端末用テーマ（既定の auto 判定は活かし、ダーク時のテーマだけ差し替える）
+--theme-dark="Catppuccin Mocha"
+
+# 行番号・Git 差分・ヘッダのみ表示（罫線なしで出力を締める）
+--style="numbers,changes,header"
+
+# イタリックを有効化（ghostty + JetBrains Mono Nerd Font はイタリック対応）
+--italic-text=always

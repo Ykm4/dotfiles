@@ -1,0 +1,7 @@
+# direnv の設定（リファレンス: man direnv.toml）
+# [whitelist] は意図的に設定しない。指定配下の .envrc が direnv allow なしで自動実行されるようになり、
+# 取引先リポジトリでは pull で流入した変更の確認機会（既定の再 allow フロー）を失うため。
+
+[global]
+# ロード時の環境変数差分（+FOO +BAR ... の羅列）を表示しない
+hide_env_diff = true
