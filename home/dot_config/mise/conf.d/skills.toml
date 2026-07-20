@@ -10,14 +10,17 @@ run = "skills ls -g"
 alias = "skls"
 
 # スキルの更新チェック
+# -g 必須: 省略すると cwd 依存でプロジェクトスコープを見てしまい、タスク経由で結果が変わる
 [tasks."agent-skills:check"]
 description = "Check for available skill updates"
-run = "skills check"
+run = "skills check -g"
 alias = "skck"
 
 # 全スキルを最新バージョンに更新（-g でグローバル限定、-y でスコーププロンプトをスキップ）
 [tasks."agent-skills:update"]
 description = "Update all installed agent skills"
+# wait_for: skills CLI 自体が mise 管理（npm:skills）のため、tools:update では mise:upgrade の完了後に実行する
+wait_for = ["mise:upgrade"]
 run = "skills update -g -y"
 alias = "skup"
 

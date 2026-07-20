@@ -1,15 +1,19 @@
-[settings]
-# ツールインストール・タスク実行の最大並列数（デフォルト: 4）
-# npm系ツールが多いため、並列数を下げてリソース競合（signal 9）を回避
-jobs = 2
+# jobs 設定は撤去済み（デフォルト: 4）。
+# npm 系の signal 9 回避で 2 に下げていたが、npm backend が aube 化して解消（並列4で検証済み）
 
 [tools]
 # ============================================================
 # Node.js関連ツール
 # ============================================================
+# Node 26 は 2026-10-28 に LTS 入り予定 → LTS 入り後に "26" へ切り替える
 node = "24"
 bun = "latest"
 pnpm = "latest"
+
+# npm backend のインストーラとして自動採用される高速パッケージマネージャ（mise 作者 jdx 製）。
+# lifecycle scripts（postinstall 等）を既定でブロックする。必要なツールは allow_builds で個別許可。
+# @see https://github.com/jdx/aube
+aube = "latest"
 
 # @see https://geminicli.com/docs/get-started/installation/
 "npm:@google/gemini-cli" = "latest"
@@ -46,7 +50,8 @@ mongosh = "latest"
 
 [tasks."brew:update"]
 description = "Update Homebrew and all formulae"
-run = "brew update && brew upgrade && brew upgrade --cask --greedy && brew cleanup"
+# autoremove: 依存として入ったが不要になった formula を削除（cleanup の前に実行）
+run = "brew update && brew upgrade && brew upgrade --cask --greedy && brew autoremove && brew cleanup"
 
 [tasks."brewfile:audit"]
 description = "Brewfile と実機の乖離を確認（cleanup dry-run + check。変更は加えない）"
@@ -62,9 +67,27 @@ brew bundle check --global --verbose || true
 description = "Upgrade all tools declared in [tools]"
 run = "mise upgrade"
 
+[tasks."brew:check"]
+description = "Show outdated brew formulae and casks (no changes)"
+run = ["brew outdated --verbose", "brew outdated --cask --greedy --verbose"]
+
+[tasks."mise:check"]
+description = "Show outdated mise tools (no changes)"
+run = "mise outdated"
+
+[tasks."mise:prune"]
+description = "Remove old tool versions no longer referenced by tracked configs"
+# --yes 必須: 確認プロンプトは非対話実行で暗黙に「いいえ」となり、何も削除されない
+# wait_for: tools:update で同時実行されるときだけ mise:upgrade の完了を待つ（単体実行には影響しない）
+wait_for = ["mise:upgrade"]
+run = "mise prune --yes"
+
 [tasks."textlint:update"]
 description = "Update textlint config (my-textlint-config) to latest main and reinstall"
-run = "cd ~/.config/textlint && bun update my-textlint-config"
+# wait_for: bun 本体が mise 管理のため、tools:update では mise:upgrade の完了後に実行する
+wait_for = ["mise:upgrade"]
+dir = "{{env.HOME}}/.config/textlint"
+run = "bun update my-textlint-config"
 
 [tasks.textlint]
 description = "Lint files (Markdown, text, HTML, LaTeX, MDX) with my-textlint-config"
@@ -72,11 +95,19 @@ dir = "{{cwd}}"
 quiet = true
 run = "$HOME/.config/textlint/node_modules/.bin/textlint --config $HOME/.config/textlint/node_modules/my-textlint-config/index.js --rules-base-directory $HOME/.config/textlint/node_modules"
 
+# 更新前の下見用。更新は行わず、利用可能な更新だけを一覧する（3タスクを並列実行）
+[tasks."tools:check"]
+description = "Show available updates for brew, mise tools, and agent skills (no changes)"
+depends = ["brew:check", "mise:check", "agent-skills:check"]
+
+# 並列 DAG 実行: brew と mise:upgrade が同時に走り、
+# prune / skills / textlint は wait_for により mise:upgrade の完了後に並列実行される
 [tasks."tools:update"]
-description = "Update brew (incl. mise), mise tools, agent skills, and textlint (sequential)"
-run = [
-    { task = "brew:update" },
-    { task = "mise:upgrade" },
-    { task = "agent-skills:update" },
-    { task = "textlint:update" },
+description = "Update brew (incl. mise), mise tools (upgrade + prune), agent skills, and textlint (parallel DAG)"
+depends = [
+    "brew:update",
+    "mise:upgrade",
+    "mise:prune",
+    "agent-skills:update",
+    "textlint:update",
 ]
