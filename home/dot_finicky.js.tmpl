@@ -7,6 +7,7 @@
   "profilePartnerB" (onepasswordRead "op://dotfiles/identity/finicky-profile-partner-b")
   "domainPartnerA" (onepasswordRead "op://dotfiles/identity/finicky-domain-partner-a")
   "domainPartnerB" (onepasswordRead "op://dotfiles/identity/finicky-domain-partner-b")
+  "atlassianSitePartnerB" (onepasswordRead "op://dotfiles/identity/finicky-atlassian-site-partner-b")
   "gcpProjectPartnerA" (onepasswordRead "op://dotfiles/identity/finicky-gcp-project-partner-a")
 -}}
 {{- if $hasSlack -}}
@@ -45,6 +46,11 @@ const domainRoutes = {
   "aws.amazon.com": partnerB,
   "awsapps.com": partnerB,
   "amazonaws.com": partnerB,
+
+  // Jira / Confluence（Atlassian Cloud）は取引先Bのみ。サイトのサブドメインは取引先識別子なので 1Password 注入。
+  // ログイン（id.atlassian.com）も、取引先Bが唯一の Atlassian 利用先のため取引先Bへ寄せる。
+  {{ $f.atlassianSitePartnerB | toJson }}: partnerB,
+  "id.atlassian.com": partnerB,
 
   // Google Workspace 管理コンソールは自社を既定にする（取引先A側の管理時は手動でプロファイル切替）
   "admin.google.com": hucomSystem,
