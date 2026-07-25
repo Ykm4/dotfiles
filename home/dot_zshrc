@@ -133,8 +133,3 @@ alias act='act --container-architecture linux/amd64'
 # direnv hook（PATH 変更の後に実行する）
 # ------------------------------------
 eval "$(direnv hook zsh)"
-
-# ------------------------------------
-# ローカル拡張（仕事用エイリアス等・chezmoi 管理外）
-# ------------------------------------
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
