@@ -15,6 +15,12 @@ pnpm = "latest"
 # @see https://github.com/jdx/aube
 aube = "latest"
 
+# @see https://github.com/github/copilot-cli
+# 公式が npm 配布を提供しているため、他の npm 系 CLI と揃えて mise 管理にする。
+# Homebrew cask だとバイナリ実体が Caskroom 内の symlink になり、copilot update での自己置換で
+# ディレクトリ名と中身のバージョンがずれる。mise 管理ならこれが起きない。
+"npm:@github/copilot" = "latest"
+
 # @see https://geminicli.com/docs/get-started/installation/
 "npm:@google/gemini-cli" = "latest"
 
@@ -48,10 +54,38 @@ go = "1"
 # @see https://www.mongodb.com/docs/mongodb-shell/
 mongosh = "latest"
 
+[tasks."brew:upgrade"]
+description = "Update Homebrew and upgrade formulae/casks (掃除は brew:cleanup)"
+# auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
+# Homebrew 6.0 から引数なしの brew upgrade が auto_updates cask も対象にするようになったので、明示的に無効化する。
+# 無効化しないと visual-studio-code の uninstall launchctl から sudo が走る。
+# mise はタスクを独立プロセスグループで起動するため、sudo の /dev/tty 読み取りが SIGTTIN になってタスクが停止する。
+env = { HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS = "1" }
+run = [
+    "brew update",
+    "brew upgrade",
+    # gcloud-cli は auto_updates 宣言があるが、実体は gcloud components update が必要で自動では上がらない。
+    # Google 公式が Homebrew でのインストールを案内しているため brew 管理を維持し、ここで明示的に更新する。
+    # sudo を呼ばないので mise タスク内でも停止しない（visual-studio-code は sudo を呼ぶため列挙しない）。
+    "brew upgrade --cask --greedy gcloud-cli",
+]
+
+[tasks."brew:cleanup"]
+description = "Remove unneeded formulae and purge old versions/caches"
+# autoremove は依存として入ったが不要になった formula を削除する。
+# cleanup はその formula の古いバージョンとキャッシュを消すため、必ず autoremove の後に実行する。
+# この2つは並列化してはいけない。順序を崩すと削除済み formula のキャッシュが残る。
+# wait_for: tools:update では更新フェーズが全て終わってから掃除する（単体実行には影響しない）。
+wait_for = ["brew:upgrade", "textlint:update", "agent-skills:update"]
+run = [
+    "brew autoremove",
+    "brew cleanup",
+]
+
+# 単体実行用のまとめタスク。brew:cleanup の wait_for により順序が保たれる。
 [tasks."brew:update"]
-description = "Update Homebrew and all formulae"
-# autoremove: 依存として入ったが不要になった formula を削除（cleanup の前に実行）
-run = "brew update && brew upgrade && brew upgrade --cask --greedy && brew autoremove && brew cleanup"
+description = "Upgrade Homebrew packages, then clean up"
+depends = ["brew:upgrade", "brew:cleanup"]
 
 [tasks."brewfile:audit"]
 description = "Brewfile と実機の乖離を確認（cleanup dry-run + check。変更は加えない）"
@@ -65,11 +99,10 @@ brew bundle check --global --verbose || true
 
 [tasks."mise:upgrade"]
 description = "Upgrade all tools declared in [tools]"
+# wait_for: mise 本体が brew formula のため、brew:upgrade が /opt/homebrew/bin/mise を貼り替え終えてから実行する。
+# 同時に走らせると unlink と link の間に mise が PATH から消える窓ができ、後続タスクが command not found になりうる。
+wait_for = ["brew:upgrade"]
 run = "mise upgrade"
-
-[tasks."brew:check"]
-description = "Show outdated brew formulae and casks (no changes)"
-run = ["brew outdated --verbose", "brew outdated --cask --greedy --verbose"]
 
 [tasks."mise:check"]
 description = "Show outdated mise tools (no changes)"
@@ -78,8 +111,9 @@ run = "mise outdated"
 [tasks."mise:prune"]
 description = "Remove old tool versions no longer referenced by tracked configs"
 # --yes 必須: 確認プロンプトは非対話実行で暗黙に「いいえ」となり、何も削除されない
-# wait_for: tools:update で同時実行されるときだけ mise:upgrade の完了を待つ（単体実行には影響しない）
-wait_for = ["mise:upgrade"]
+# wait_for: mise 管理のツールを使うタスクが全て終わってから、参照されなくなった版を削除する。
+# textlint:update と agent-skills:update は mise 管理の bun / skills を使うため、その完了も待つ。
+wait_for = ["mise:upgrade", "textlint:update", "agent-skills:update"]
 run = "mise prune --yes"
 
 [tasks."textlint:update"]
@@ -95,19 +129,19 @@ dir = "{{cwd}}"
 quiet = true
 run = "$HOME/.config/textlint/node_modules/.bin/textlint --config $HOME/.config/textlint/node_modules/my-textlint-config/index.js --rules-base-directory $HOME/.config/textlint/node_modules"
 
-# 更新前の下見用。更新は行わず、利用可能な更新だけを一覧する（3タスクを並列実行）
-[tasks."tools:check"]
-description = "Show available updates for brew, mise tools, and agent skills (no changes)"
-depends = ["brew:check", "mise:check", "agent-skills:check"]
-
-# 並列 DAG 実行: brew と mise:upgrade が同時に走り、
-# prune / skills / textlint は wait_for により mise:upgrade の完了後に並列実行される
+# wait_for により 4 フェーズで進む。各段の中だけが並列になるので、
+# ターミナル上で「いま何をしているか」が読み取りやすい。
+#   [1] brew:upgrade                          … Homebrew 本体と formula / cask の更新
+#   [2] mise:upgrade                          … [tools] の更新（mise 本体の貼り替え完了後）
+#   [3] textlint:update + agent-skills:update … mise 管理のツールを使う更新
+#   [4] mise:prune + brew:cleanup             … 参照されなくなった版とキャッシュの掃除
 [tasks."tools:update"]
-description = "Update brew (incl. mise), mise tools (upgrade + prune), agent skills, and textlint (parallel DAG)"
+description = "Update brew, mise tools, agent skills, and textlint, then prune (4-phase DAG)"
 depends = [
-    "brew:update",
+    "brew:upgrade",
     "mise:upgrade",
-    "mise:prune",
-    "agent-skills:update",
     "textlint:update",
+    "agent-skills:update",
+    "mise:prune",
+    "brew:cleanup",
 ]
