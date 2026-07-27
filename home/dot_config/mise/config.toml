@@ -54,6 +54,12 @@ go = "1"
 # @see https://www.mongodb.com/docs/mongodb-shell/
 mongosh = "latest"
 
+# @see https://github.com/xo/usql
+# 多DB対応の CLI SQL クライアント。dev/stg の Aurora MySQL を踏み台経由で参照するのに使う。
+# -J の JSON 出力に加えて \dt / \d のメタコマンドまで JSON 化されるため、AI エージェントから叩きやすい。
+# Homebrew の xo/xo tap は bottle が無く Go のソースビルドになるので mise（aqua backend）で入れる。
+usql = "latest"
+
 [tasks."brew:upgrade"]
 description = "Update Homebrew and upgrade formulae/casks (掃除は brew:cleanup)"
 # auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
