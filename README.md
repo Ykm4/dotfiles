@@ -29,7 +29,8 @@ chezmoi apply                                                # [3] 再適用で�
 - git設定（`.gitconfig`・`git/allowed_signers`・`git/ignore`）— コミット署名は1PasswordのSSHエージェント経由
 - gh（GitHub CLI）設定（`gh/private_config.yml`）
 - SSHクライアント設定（`.ssh/config`）— `IdentityAgent`を1PasswordのSSHエージェントに固定
-- 1Password SSHエージェントの鍵許可リスト（`1Password/ssh/agent.toml`）— エージェントに載せる鍵をここで明示的に絞る。
+- 1Password SSHエージェントの鍵許可リスト（`1Password/ssh/agent.toml`）— エージェントに載せる鍵をここで明示的に絞る。取引先の鍵はitem名・vault名が識別子にあたるため1Passwordから注入。
+- 取引先踏み台向けSSH設定（`.ssh/config.local`）と公開鍵（`.ssh/partner-*.pub`）— 値は1Passwordから注入。秘密鍵はSSH Keyアイテムとしてエージェントが保持し、ディスクには置かない。`IdentityFile`には公開鍵を指定し`IdentitiesOnly yes`を維持する（外すとエージェント上の全鍵を順に提示するため`MaxAuthTries`に達し、無関係な鍵をサーバへ送ることになる）。既存鍵の取り込みは`op`では行えず1Passwordアプリからインポートする。
 - ghostty・starship・mise・duti・bat・direnvの各設定
 - Finicky設定（`~/.finicky.js`）— リンクを対応表に従いブラウザ・プロファイルへ振り分け、Slack/Zoom/Teamsはdeep linkでアプリ起動（既定はArc）。取引先の識別子（プロファイル名・ドメイン・GCPプロジェクト）は1Passwordから注入。検証は`mise r finicky:verify`（dry-runでブラウザを開かずに全経路を確認する）。
 - cmux設定（`~/.config/cmux/cmux.json`）— ターミナル内`open`の横取りを無効化しFinicky経由に統一。変更後は`cmux reload-config`で反映
@@ -45,7 +46,7 @@ chezmoi apply                                                # [3] 再適用で�
 新マシンでの`chezmoi apply`完了後、次を手動で行う。
 
 - `gh auth login`・プロファイルごとの`gws auth login`・`gcloud auth login`を再実行する。
-- `~/.zshrc.local`・`~/.ssh/config.local`を旧マシンから手動で移送する（chezmoi管理外のローカル拡張）。
+- `~/.zshrc.local`を旧マシンから手動で移送する（chezmoi管理外のローカル拡張）。
 - 取引先スコープの設定は、1Passwordの取引先用Vaultから`op read`で手動復元する。
 - Claude Codeの非公開設定（`CLAUDE.md`・`settings.json`・一部skills）をprivateリポジトリから復元する。
 
@@ -67,7 +68,7 @@ chezmoi apply                                                # [3] 再適用で�
 chezmoiのテンプレートが参照するのは`dotfiles` Vaultのみである。
 
 - `dotfiles` Vault
-  - item `identity` — gcloudのaccount・project（`hucom-system`・`personal`の各プロファイル分）とFinicky用の取引先識別子。Finicky用は`finicky-profile/domain/gcp-project-partner-*`、Slack導入時は`finicky-slack-subdomain/team-partner-*`も必須
+  - item `identity` — gcloudのaccount・project（`hucom-system`・`personal`の各プロファイル分）、Finicky用の取引先識別子、取引先踏み台のSSH設定。Finicky用は`finicky-profile/domain/gcp-project-partner-*`、Slack導入時は`finicky-slack-subdomain/team-partner-*`も必須。SSH用は`ssh-vault-partner-*`・`ssh-item-partner-*-{dev,stg}`・`ssh-pubkey-partner-*-{dev,stg}`・`ssh-config-partner-*`の4系統
   - item `mise-secrets` — miseのsecrets.tomlに注入する値（APIキー・取引先envパス）
   - item `gws-client-secret` — Google Workspace APIのclient secret（`hucom-system`・`personal`の各プロファイル分）
   - item `git-signing` — コミット署名用SSH鍵（1PasswordのSSHエージェント経由でのみ使用し、秘密鍵はディスクに書き出さない）

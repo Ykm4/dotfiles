@@ -1,0 +1,14 @@
+# 1Password SSH エージェントが提示する鍵の許可リスト（記述順 = 提示順）。
+# ここに書いた鍵だけがエージェントに載る。名前のタイプミスはエラーにならず静かに外れる。
+[[ssh-keys]]
+item  = "git-signing"
+vault = "dotfiles"
+
+# 取引先の踏み台鍵（dev / stg）。item 名と vault 名は取引先の識別子にあたるため 1Password から注入する。
+[[ssh-keys]]
+item  = "{{ onepasswordRead "op://dotfiles/identity/ssh-item-partner-b-dev" }}"
+vault = "{{ onepasswordRead "op://dotfiles/identity/ssh-vault-partner-b" }}"
+
+[[ssh-keys]]
+item  = "{{ onepasswordRead "op://dotfiles/identity/ssh-item-partner-b-stg" }}"
+vault = "{{ onepasswordRead "op://dotfiles/identity/ssh-vault-partner-b" }}"
