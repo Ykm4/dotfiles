@@ -55,6 +55,10 @@ chezmoi apply                                                # [3] 再適用で�
 
 - シンボリックリンク型のskills（`~/.agents/skills/`参照）は`skills` CLI（mise管理の`npm:skills`）で再インストールする。依存を持つskillは各ディレクトリで`bun install`する（現状はskill-lintのみ）。
 - Claude Codeのプラグインはmarketplaceから再インストールする。
+- Claude Code CLI本体をネイティブインストーラで導入する: `curl -fsSL https://claude.ai/install.sh | bash`（Brewfile管理外。導入後は自己アップデート）。
+- Claude Desktop（アプリ本体はBrewfileのcask）は`claude_desktop_config.json`に宣言的設定を置かない方針とし、MCPは拡張とコネクタに一本化する。復元は次の2つを手動で行う。
+  - 設定 > エクステンションからFilesystem・Chrome control・Context7を再インストールし、Filesystemの許可ディレクトリを最小限で再設定する。
+  - 設定 > コネクタで1Password等を再接続する。ChatとCowork用のスキル・プラグイン・コネクタはclaude.aiアカウント同期のため、サインインすれば復元される。
 - Finickyを一度起動し、macOSの既定ブラウザに設定する（OSの確認ダイアログで承認する。ブラウザの振り分けルールは`~/.finicky.js`が担う）。
 - colimaのVMを初回起動時にリソース指定で作成する: `colima start --cpu 6 --memory 6 --disk 100`（既定値のままVMを作った場合は`colima delete`後に再作成する）。
 
