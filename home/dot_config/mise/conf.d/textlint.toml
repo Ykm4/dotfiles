@@ -1,0 +1,16 @@
+# ============================================================
+# textlint Tasks
+# ============================================================
+
+[tasks."textlint:update"]
+description = "textlint の設定（my-textlint-config）を最新の main に更新し、再インストールする"
+# wait_for: bun 本体が mise 管理のため、tools:update では mise:upgrade の完了後に実行する
+wait_for = ["mise:upgrade"]
+dir = "{{vars.textlint_home}}"
+run = "bun update my-textlint-config"
+
+[tasks.textlint]
+description = "my-textlint-config でファイル（Markdown・text・HTML・LaTeX・MDX）をリントする"
+dir = "{{cwd}}"
+quiet = true
+run = "{{vars.textlint_home}}/node_modules/.bin/textlint --config {{vars.textlint_home}}/node_modules/my-textlint-config/index.js --rules-base-directory {{vars.textlint_home}}/node_modules"

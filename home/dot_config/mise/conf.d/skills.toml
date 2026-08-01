@@ -5,20 +5,20 @@
 
 # インストール済みのグローバルスキル一覧
 [tasks."agent-skills:ls"]
-description = "List installed global skills"
+description = "インストール済みのグローバルスキルを一覧表示する"
 run = "skills ls -g"
 alias = "skls"
 
 # スキルの更新チェック
 # -g 必須: 省略すると cwd 依存でプロジェクトスコープを見てしまい、タスク経由で結果が変わる
 [tasks."agent-skills:check"]
-description = "Check for available skill updates"
+description = "更新可能なスキルを確認する"
 run = "skills check -g"
 alias = "skck"
 
 # 全スキルを最新バージョンに更新（-g でグローバル限定、-y でスコーププロンプトをスキップ）
 [tasks."agent-skills:update"]
-description = "Update all installed agent skills"
+description = "インストール済みの全 agent skills を更新する"
 # wait_for: skills CLI 自体が mise 管理（npm:skills）のため、tools:update では mise:upgrade の完了後に実行する
 wait_for = ["mise:upgrade"]
 run = "skills update -g -y"
@@ -26,19 +26,75 @@ alias = "skup"
 
 # スキルを検索（引数なしでインタラクティブ検索）
 [tasks."agent-skills:find"]
-description = "Search for skills (interactive or by keyword)"
-run = "skills find {{arg(name='query', default='')}}"
+description = "スキルを検索する（インタラクティブまたはキーワード指定）"
+usage = '''
+arg "[query]" help="検索キーワード。省略時はインタラクティブ検索"
+'''
+# ${usage_query:+...}: query があるときだけ引数を渡す（空引数を渡すと検索語扱いになるため）
+run = 'skills find ${usage_query:+"$usage_query"}'
 alias = "skf"
 
 # スキルをグローバルにインストール
 # 例: mise run agent-skills:add cloudflare/skills -s wrangler
+# depends_post: スキル構成が変わるたびに Skillsfile を再生成し、dotfiles との同期漏れを防ぐ。
 [tasks."agent-skills:add"]
-description = "Add a skill package globally"
-run = "skills add {{arg(name='package')}} -g {{option(name='skill', short='s', default='')}}"
+description = "スキルパッケージをグローバルに追加する"
+usage = '''
+arg "<package>" help="owner/repo 形式のスキルパッケージ"
+flag "-s --skill <skill>" help="インストールするスキル名。省略時はリポジトリの全スキルが対象"
+'''
+run = 'skills add "${usage_package?}" -g ${usage_skill:+--skill "$usage_skill"}'
+depends_post = ["agent-skills:dump"]
 alias = "ska"
 
 # スキルをグローバルから削除（引数なしでインタラクティブ選択）
 [tasks."agent-skills:remove"]
-description = "Remove installed skills globally"
-run = "skills remove -g {{arg(name='skill', default='')}}"
+description = "インストール済みのスキルをグローバルから削除する"
+usage = '''
+arg "[skill]" help="削除するスキル名。省略時はインタラクティブ選択"
+'''
+run = 'skills remove -g ${usage_skill:+"$usage_skill"}'
+depends_post = ["agent-skills:dump"]
 alias = "skrm"
+
+# インストール済みグローバルスキルを Skillsfile（宣言マニフェスト）へ書き出す
+# ~/.agents/.skill-lock.json から source とスキル名だけを抽出する。
+# ref やハッシュは含めないため、skills update で ref が進んでも出力は変わらない。
+# 差分が出るのはスキルの追加・削除時のみで、add / remove の depends_post が自動で反映する。
+# 書き出し後に chezmoi add で dotfiles ソースへ反映する（コミットは手動）。
+[tasks."agent-skills:dump"]
+description = "インストール済みのグローバルスキルを Skillsfile へ書き出す（新マシン用マニフェスト）"
+run = '''
+set -eu
+skillsfile="{{vars.skillsfile}}"
+mkdir -p "$(dirname "$skillsfile")"
+{
+  echo "# Agent skills manifest（mise run agent-skills:dump が生成。手編集しない）"
+  echo "# 形式: <owner/repo> <skill> [skill...]"
+  echo "# 復元: mise run agent-skills:restore"
+  jq -r '.skills | to_entries | group_by(.value.source)[] | "\(.[0].value.source) \(map(.key) | sort | join(" "))"' "$HOME/.agents/.skill-lock.json"
+} > "$skillsfile"
+if command -v chezmoi >/dev/null 2>&1; then
+  chezmoi add "$skillsfile"
+fi
+'''
+alias = "skdump"
+
+# Skillsfile の全スキルをグローバル再インストールする（新マシンのセットアップ用・冪等）
+# 同一ソースのスキルは 1 回の取得でまとめて入れる。インストール先エージェントは実行時に自動検出される。
+# 新マシンでは chezmoi apply の .chezmoiscripts/run_onchange_after_25-agent-skills-restore.sh.tmpl から呼ばれる。
+[tasks."agent-skills:restore"]
+description = "Skillsfile からグローバルスキルを復元する"
+run = '''
+set -eu
+status=0
+while read -r source skill_names; do
+  case "$source" in ''|'#'*) continue ;; esac
+  # < /dev/null: skills CLI に Skillsfile のリダイレクトを stdin として読ませない（読むとループが 1 件で終わる）。
+  # || status: 一部エージェントの非対応（例: PromptScript）で全体を止めず、最後にまとめて失敗を返す。
+  # $skill_names は複数スキル名を個別引数に分けるため、意図的にクオートしない。
+  skills add "$source" -g -y --skill $skill_names < /dev/null || status=$?
+done < "{{vars.skillsfile}}"
+exit $status
+'''
+alias = "skrestore"

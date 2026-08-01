@@ -1,0 +1,48 @@
+# ============================================================
+# Homebrew Tasks
+# ============================================================
+
+[tasks."brew:upgrade"]
+description = "Homebrew 本体と formula/cask を更新する（掃除は brew:cleanup）"
+# auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
+# Homebrew 6.0 から引数なしの brew upgrade が auto_updates cask も対象にするようになったので、明示的に無効化する。
+# 無効化しないと visual-studio-code の uninstall launchctl から sudo が走る。
+# mise はタスクを独立プロセスグループで起動するため、sudo の /dev/tty 読み取りが SIGTTIN になってタスクが停止する。
+env = { HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS = "1" }
+run = [
+    "brew update",
+    "brew upgrade",
+    # gcloud-cli は auto_updates 宣言があるが、実体は gcloud components update が必要で自動では上がらない。
+    # Google 公式が Homebrew でのインストールを案内しているため brew 管理を維持し、ここで明示的に更新する。
+    # sudo を呼ばないので mise タスク内でも停止しない（visual-studio-code は sudo を呼ぶため列挙しない）。
+    "brew upgrade --cask --greedy gcloud-cli",
+]
+
+[tasks."brew:cleanup"]
+description = "不要になった formula を削除し、古いバージョンとキャッシュを消す"
+# autoremove は依存として入ったが不要になった formula を削除する。
+# cleanup はその formula の古いバージョンとキャッシュを消すため、必ず autoremove の後に実行する。
+# この2つは並列化してはいけない。順序を崩すと削除済み formula のキャッシュが残る。
+# wait_for: tools:update では全更新タスク（tools:updaters）が終わってから掃除する。
+# brew:upgrade も明示するのは、brew:update（tools:updaters を含まない）単体実行時の順序を保つため。
+wait_for = ["brew:upgrade", "tools:updaters"]
+run = [
+    "brew autoremove",
+    "brew cleanup",
+]
+
+# 単体実行用のまとめタスク。brew:cleanup の wait_for により順序が保たれる。
+[tasks."brew:update"]
+description = "Homebrew パッケージを更新し、掃除する"
+depends = ["brew:upgrade", "brew:cleanup"]
+
+[tasks."brewfile:audit"]
+description = "Brewfile と実機の乖離を確認（cleanup dry-run + check。変更は加えない）"
+# XDG_CONFIG_HOME があると --global の参照先が ~/.config/homebrew/Brewfile に変わるため、明示的に固定する。
+env = { HOMEBREW_BUNDLE_FILE_GLOBAL = "{{env.HOME}}/.Brewfile" }
+run = '''
+echo "== 未宣言でインストール済み（削除候補） =="
+brew bundle cleanup --global || true
+echo "== 宣言済みで未インストール =="
+brew bundle check --global --verbose || true
+'''

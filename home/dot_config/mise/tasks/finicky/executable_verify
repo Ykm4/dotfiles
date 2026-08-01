@@ -6,32 +6,52 @@
 set -u
 
 FINICKY_BIN="/Applications/Finicky.app/Contents/MacOS/Finicky"
-LOG="$(mktemp -t finicky-verify)"
 PASS=0
 FAIL=0
+SKIP=0
+
+# 「既定（Arc）に落ちた」ことを示すログ。末尾の半角スペースは open -a の引数境界で、欠けると前方一致に緩む。
+readonly TO_DEFAULT='Would run command.*open -a Arc '
+readonly TO_HUCOM_PROFILE='Found profile by name","name":"hucomsystem"'
 
 [[ -x "$FINICKY_BIN" ]] || { echo "Finicky.app が見つからない"; exit 1; }
+LOG="$(mktemp -t finicky-verify)"
+
+die() { echo "$1"; tail -5 "$LOG"; exit 1; }
+
+# Finicky を止め、終了をポーリングで待つ（最大 2 秒）
+stop_finicky() {
+  pkill -x Finicky 2>/dev/null
+  local i
+  for ((i = 0; i < 40; i++)); do
+    pgrep -x Finicky >/dev/null || return 0
+    sleep 0.05
+  done
+}
 
 cleanup() {
-  pkill -x Finicky 2>/dev/null || true
-  sleep 1
+  stop_finicky
   /usr/bin/open -a Finicky # 通常起動に戻す
+  rm -f "$LOG"
 }
 trap cleanup EXIT
 
-pkill -x Finicky 2>/dev/null || true
-sleep 1
+# wait_log <開始行> <固定文字列> <試行回数> — LOG の開始行以降に文字列が出るまで 0.1 秒刻みで待つ
+wait_log() {
+  local start="$1" pattern="$2" tries="$3" i
+  for ((i = 0; i < tries; i++)); do
+    [[ "$(tail -n +"$((start + 1))" "$LOG")" == *"$pattern"* ]] && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
+stop_finicky
 nohup "$FINICKY_BIN" --dry-run >"$LOG" 2>&1 &
 
-for _ in $(seq 1 20); do
-  grep -q "Listening for events" "$LOG" && break
-  sleep 0.5
-done
-grep -q "Listening for events" "$LOG" || { echo "Finicky (dry-run) が起動しない"; tail -5 "$LOG"; exit 1; }
+wait_log 0 "Listening for events" 100 || die "Finicky (dry-run) が起動しない"
 if grep -qiE "error while running config|failed to (setup|get|validate)" "$LOG"; then
-  echo "設定の読み込みエラー:"
-  tail -5 "$LOG"
-  exit 1
+  die "設定の読み込みエラー:"
 fi
 
 # check <説明> <URL> <ログに現れるべきパターン(grep -E)>
@@ -40,11 +60,8 @@ check() {
   local before delta
   before=$(wc -l <"$LOG")
   /usr/bin/open "$url"
-  for _ in $(seq 1 20); do
-    delta=$(tail -n +"$((before + 1))" "$LOG")
-    grep -q "Would run command" <<<"$delta" && break
-    sleep 0.3
-  done
+  wait_log "$before" "Would run command" 60
+  delta=$(tail -n +"$((before + 1))" "$LOG")
   if grep -qE "$expect" <<<"$delta"; then
     echo "PASS  $desc"
     PASS=$((PASS + 1))
@@ -55,34 +72,41 @@ check() {
   fi
 }
 
+# check_app <アプリのバンドル名> <説明> <URL> <パターン> — 未導入なら SKIP を表示して飛ばす
+check_app() {
+  local app="$1"; shift
+  if [[ -d "/Applications/$app" ]]; then
+    check "$@"
+  else
+    echo "SKIP  $1（$app 未導入）"
+    SKIP=$((SKIP + 1))
+  fi
+}
+
 # ---- 敵対的ケース: 既定（Arc）に落ちること ----
 check "パス偽装は既定に落ちる" \
-  "https://evil.example/x.github.com/a" 'Would run command.*open -a Arc '
+  "https://evil.example/x.github.com/a" "$TO_DEFAULT"
 check "DNS ラベル境界（notzoom.us を Zoom 扱いしない）" \
-  "https://notzoom.us/j/12345" 'Would run command.*open -a Arc '
+  "https://notzoom.us/j/12345" "$TO_DEFAULT"
 check "prototype 汚染キーを GCP project と誤認しない" \
-  "https://console.cloud.google.com/home?project=constructor" 'Would run command.*open -a Arc '
+  "https://console.cloud.google.com/home?project=constructor" "$TO_DEFAULT"
 
 # ---- 正常系: 公開可能な値だけで断定する ----
 check "github.com は Chrome のプロファイル付きで開く" \
   "https://github.com/" "Would run command.*'Google Chrome' -n --args '--profile-directory="
 check "admin.google.com は自社プロファイルで開く" \
-  "https://admin.google.com/" 'Found profile by name","name":"hucomsystem"'
+  "https://admin.google.com/" "$TO_HUCOM_PROFILE"
 check "GCP の自社 project は自社プロファイルで開く" \
-  "https://console.cloud.google.com/home?project=hucomsystem-gws" 'Found profile by name","name":"hucomsystem"'
+  "https://console.cloud.google.com/home?project=hucomsystem-gws" "$TO_HUCOM_PROFILE"
 check "トラッキングパラメータが除去される" \
   "https://github.com/?utm_source=verify&gclid=x" 'Starting browser.*"url":"https://github.com/"'
 
 # ---- deep link: アプリ導入時のみルールが存在する ----
-if [[ -d "/Applications/zoom.us.app" ]]; then
-  check "Zoom 招待リンクは zoommtg:// に変換される" \
-    "https://zoom.us/j/1234567890?pwd=abc" 'Would run command.*zoommtg://zoom.us/join\?confno=1234567890'
-fi
-if [[ -d "/Applications/Slack.app" ]]; then
-  check "Slack の app.slack.com リンクは slack:// に変換される" \
-    "https://app.slack.com/client/T0TEST123/C0TEST456/1234.5678" 'Would run command.*slack://channel\?team=T0TEST123&id=C0TEST456&message=1234.5678'
-fi
+check_app "zoom.us.app" "Zoom 招待リンクは zoommtg:// に変換される" \
+  "https://zoom.us/j/1234567890?pwd=abc" 'Would run command.*zoommtg://zoom.us/join\?confno=1234567890'
+check_app "Slack.app" "Slack の app.slack.com リンクは slack:// に変換される" \
+  "https://app.slack.com/client/T0TEST123/C0TEST456/1234.5678" 'Would run command.*slack://channel\?team=T0TEST123&id=C0TEST456&message=1234.5678'
 
 echo
-echo "結果: PASS=${PASS} FAIL=${FAIL}"
+echo "結果: PASS=${PASS} FAIL=${FAIL} SKIP=${SKIP}"
 [[ "$FAIL" -eq 0 ]]

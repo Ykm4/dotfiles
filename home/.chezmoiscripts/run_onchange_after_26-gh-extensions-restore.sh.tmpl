@@ -1,0 +1,10 @@
+#!/bin/bash
+# gh.toml（拡張リストを含む mise タスク定義）が変わったら gh 拡張を復元する
+# gh.toml hash: {{ include "dot_config/mise/conf.d/gh.toml" | sha256sum }}
+set -eu
+eval "$(/opt/homebrew/bin/brew shellenv)"
+if gh auth status >/dev/null 2>&1; then
+  mise run gh-ext:restore
+else
+  echo "gh 未認証のため gh 拡張の復元をスキップしました。gh auth login 後に 'mise run gh-ext:restore' を実行してください。" >&2
+fi

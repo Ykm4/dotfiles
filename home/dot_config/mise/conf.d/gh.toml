@@ -1,0 +1,25 @@
+# ============================================================
+# GitHub CLI Extension Tasks
+# gh 本体は brew 管理だが、拡張（gh extension）は gh が別管理のため、
+# 更新は tools:update に組み込み、新マシン復元は gh-ext:restore が担う。
+# ============================================================
+
+# 全拡張の更新。brew は gh 本体しか更新しない。
+# wait_for: tools:update では gh 本体（brew formula）の貼り替え完了後に実行する。
+[tasks."gh-ext:upgrade"]
+description = "gh 拡張をすべて更新する"
+wait_for = ["brew:upgrade"]
+run = "gh extension upgrade --all"
+
+# 新マシンでの拡張復元（冪等）。拡張を増やすときは GH_EXTENSIONS に追記する（スペース区切り）。
+# gh 未認証だと extension install が失敗するため、chezmoi apply 側で認証済みのときだけ呼ばれる。
+[tasks."gh-ext:restore"]
+description = "gh 拡張をインストールする（新マシンでの復元用）"
+env = { GH_EXTENSIONS = "github/gh-stack" }
+run = '''
+set -eu
+installed=$(gh extension list | awk -F'\t' '{print $2}')
+for ext in $GH_EXTENSIONS; do
+  printf '%s\n' "$installed" | grep -qxF "$ext" || gh extension install "$ext"
+done
+'''

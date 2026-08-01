@@ -1,0 +1,6 @@
+#!/bin/bash
+# Skillsfile が変わったら（新マシン初回を含む）グローバルの agent skills を復元する
+# Skillsfile hash: {{ include "dot_config/agent-skills/Skillsfile" | sha256sum }}
+set -eu
+eval "$(/opt/homebrew/bin/brew shellenv)"
+mise run agent-skills:restore

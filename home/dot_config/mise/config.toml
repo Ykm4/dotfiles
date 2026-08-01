@@ -1,5 +1,17 @@
-# jobs 設定は撤去済み（デフォルト: 4）。
-# npm 系の signal 9 回避で 2 に下げていたが、npm backend が aube 化して解消（並列4で検証済み）
+# ============================================================
+# 管理境界:
+# - [tools]・mise 自身のタスク・tools:update（全体 DAG）は本ファイルに置く。
+# - ドメイン別タスク（brew / textlint / skills / gh / db）は conf.d/<domain>.toml に置く。
+# - chezmoi の run_onchange_after_20-mise-install.sh.tmpl は本ファイルの hash で
+#   mise install を再実行するため、[tools] は必ず本ファイルに書く（conf.d に書くと新マシンで導入されない）。
+# ============================================================
+# jobs は既定（4）のまま。npm backend の aube 化で signal 9 は解消済み（再び下げない）。
+
+# タスク定義から共有するパス。run と usage（complete 含む）の両方で {{vars.x}} として展開される。
+[vars]
+dbx = "{{env.HOME}}/.config/dbx/bin/dbx"
+skillsfile = "{{env.HOME}}/.config/agent-skills/Skillsfile"
+textlint_home = "{{env.HOME}}/.config/textlint"
 
 [tools]
 # ============================================================
@@ -60,94 +72,48 @@ mongosh = "latest"
 # Homebrew の xo/xo tap は bottle が無く Go のソースビルドになるので mise（aqua backend）で入れる。
 usql = "latest"
 
-[tasks."brew:upgrade"]
-description = "Update Homebrew and upgrade formulae/casks (掃除は brew:cleanup)"
-# auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
-# Homebrew 6.0 から引数なしの brew upgrade が auto_updates cask も対象にするようになったので、明示的に無効化する。
-# 無効化しないと visual-studio-code の uninstall launchctl から sudo が走る。
-# mise はタスクを独立プロセスグループで起動するため、sudo の /dev/tty 読み取りが SIGTTIN になってタスクが停止する。
-env = { HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS = "1" }
-run = [
-    "brew update",
-    "brew upgrade",
-    # gcloud-cli は auto_updates 宣言があるが、実体は gcloud components update が必要で自動では上がらない。
-    # Google 公式が Homebrew でのインストールを案内しているため brew 管理を維持し、ここで明示的に更新する。
-    # sudo を呼ばないので mise タスク内でも停止しない（visual-studio-code は sudo を呼ぶため列挙しない）。
-    "brew upgrade --cask --greedy gcloud-cli",
-]
-
-[tasks."brew:cleanup"]
-description = "Remove unneeded formulae and purge old versions/caches"
-# autoremove は依存として入ったが不要になった formula を削除する。
-# cleanup はその formula の古いバージョンとキャッシュを消すため、必ず autoremove の後に実行する。
-# この2つは並列化してはいけない。順序を崩すと削除済み formula のキャッシュが残る。
-# wait_for: tools:update では更新フェーズが全て終わってから掃除する（単体実行には影響しない）。
-wait_for = ["brew:upgrade", "textlint:update", "agent-skills:update"]
-run = [
-    "brew autoremove",
-    "brew cleanup",
-]
-
-# 単体実行用のまとめタスク。brew:cleanup の wait_for により順序が保たれる。
-[tasks."brew:update"]
-description = "Upgrade Homebrew packages, then clean up"
-depends = ["brew:upgrade", "brew:cleanup"]
-
-[tasks."brewfile:audit"]
-description = "Brewfile と実機の乖離を確認（cleanup dry-run + check。変更は加えない）"
-run = '''
-export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
-echo "== 未宣言でインストール済み（削除候補） =="
-brew bundle cleanup --global || true
-echo "== 宣言済みで未インストール =="
-brew bundle check --global --verbose || true
-'''
-
 [tasks."mise:upgrade"]
-description = "Upgrade all tools declared in [tools]"
+description = "[tools] に宣言した全ツールを更新する"
 # wait_for: mise 本体が brew formula のため、brew:upgrade が /opt/homebrew/bin/mise を貼り替え終えてから実行する。
 # 同時に走らせると unlink と link の間に mise が PATH から消える窓ができ、後続タスクが command not found になりうる。
 wait_for = ["brew:upgrade"]
 run = "mise upgrade"
 
 [tasks."mise:check"]
-description = "Show outdated mise tools (no changes)"
+description = "更新可能な mise ツールを表示する（変更は加えない）"
 run = "mise outdated"
 
 [tasks."mise:prune"]
-description = "Remove old tool versions no longer referenced by tracked configs"
+description = "追跡設定から参照されなくなった旧バージョンを削除する"
 # --yes 必須: 確認プロンプトは非対話実行で暗黙に「いいえ」となり、何も削除されない
-# wait_for: mise 管理のツールを使うタスクが全て終わってから、参照されなくなった版を削除する。
-# textlint:update と agent-skills:update は mise 管理の bun / skills を使うため、その完了も待つ。
-wait_for = ["mise:upgrade", "textlint:update", "agent-skills:update"]
+# wait_for: tools:update では全更新タスク（tools:updaters）の完了後に、参照されなくなった版を削除する。
+wait_for = ["mise:upgrade", "tools:updaters"]
 run = "mise prune --yes"
 
-[tasks."textlint:update"]
-description = "Update textlint config (my-textlint-config) to latest main and reinstall"
-# wait_for: bun 本体が mise 管理のため、tools:update では mise:upgrade の完了後に実行する
-wait_for = ["mise:upgrade"]
-dir = "{{env.HOME}}/.config/textlint"
-run = "bun update my-textlint-config"
-
-[tasks.textlint]
-description = "Lint files (Markdown, text, HTML, LaTeX, MDX) with my-textlint-config"
-dir = "{{cwd}}"
-quiet = true
-run = "$HOME/.config/textlint/node_modules/.bin/textlint --config $HOME/.config/textlint/node_modules/my-textlint-config/index.js --rules-base-directory $HOME/.config/textlint/node_modules"
-
-# wait_for により 4 フェーズで進む。各段の中だけが並列になるので、
-# ターミナル上で「いま何をしているか」が読み取りやすい。
-#   [1] brew:upgrade                          … Homebrew 本体と formula / cask の更新
-#   [2] mise:upgrade                          … [tools] の更新（mise 本体の貼り替え完了後）
-#   [3] textlint:update + agent-skills:update … mise 管理のツールを使う更新
-#   [4] mise:prune + brew:cleanup             … 参照されなくなった版とキャッシュの掃除
-[tasks."tools:update"]
-description = "Update brew, mise tools, agent skills, and textlint, then prune (4-phase DAG)"
+# 更新フェーズ（[1]〜[3]）の集約タスク。更新タスクを増やすときはここへ足すだけにする。
+# 掃除タスク（mise:prune / brew:cleanup）はこれを wait_for に取ることで、tools:update 実行時に
+# 全更新の完了後へ順序づけられる（単体実行や brew:update では存在しないので待ちは発生しない）。
+[tasks."tools:updaters"]
+description = "全更新タスクを集約する（tools:update 用）"
+hide = true
 depends = [
     "brew:upgrade",
     "mise:upgrade",
     "textlint:update",
     "agent-skills:update",
+    "gh-ext:upgrade",
+]
+
+# wait_for により 4 フェーズで進む。各段の中だけが並列になるので、
+# ターミナル上で「いま何をしているか」が読み取りやすい。
+#   [1] brew:upgrade                          … Homebrew 本体と formula / cask の更新
+#   [2] mise:upgrade + gh-ext:upgrade         … [tools] と gh 拡張の更新（いずれも brew の貼り替え完了後）
+#   [3] textlint:update + agent-skills:update … mise 管理のツールを使う更新
+#   [4] mise:prune + brew:cleanup             … 参照されなくなった版とキャッシュの掃除（tools:updaters 完了後）
+[tasks."tools:update"]
+description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（4 フェーズ DAG）"
+depends = [
+    "tools:updaters",
     "mise:prune",
     "brew:cleanup",
 ]
