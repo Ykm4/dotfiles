@@ -1,0 +1,606 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+umask 077
+
+TARGETS_FILE="$HOME/.config/dbx/targets.json"
+
+USQL_BIN=""
+JQ_BIN=""
+SSH_BIN=""
+PYTHON_BIN=""
+MKTEMP_BIN=""
+MKDIR_BIN=""
+RMDIR_BIN=""
+RM_BIN=""
+ID_BIN=""
+SLEEP_BIN=""
+AWS_BIN=""
+TARGET_DRIVER=""
+
+TEMP_DIR=""
+USQL_CONFIG_FILE=""
+FORWARD_SOCKET=""
+FORWARD_SPEC=""
+FORWARD_ACTIVE=0
+
+CONTROL_PATH=""
+MASTER_LOCK_DIR=""
+MASTER_LOCK_HELD=0
+BASTION=""
+SSH_OPTIONS=()
+
+usage() {
+  printf '%s\n' \
+    'Usage:' \
+    '  dbx query <target> [sql]' \
+    '  dbx shell <target>' \
+    '  dbx ls [--names]' \
+    '  dbx reset <bastion>'
+}
+
+die() {
+  printf 'dbx: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  local name=$1
+  local install_hint=$2
+  local path
+
+  if ! path=$(command -v "$name" 2>/dev/null); then
+    printf 'dbx: 必要なコマンドが見つかりません: %s\n' "$name" >&2
+    printf 'dbx: 導入方法: %s\n' "$install_hint" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$path"
+}
+
+resolve_commands() {
+  USQL_BIN=$(require_command usql 'mise install usql')
+  JQ_BIN=$(require_command jq 'brew install jq')
+  SSH_BIN=$(require_command ssh 'macOS 標準の OpenSSH を利用できる状態にしてください')
+  PYTHON_BIN=$(require_command python3 'brew install python')
+  MKTEMP_BIN=$(require_command mktemp 'macOS 標準の mktemp を利用できる状態にしてください')
+  MKDIR_BIN=$(require_command mkdir 'macOS 標準の mkdir を利用できる状態にしてください')
+  RMDIR_BIN=$(require_command rmdir 'macOS 標準の rmdir を利用できる状態にしてください')
+  RM_BIN=$(require_command rm 'macOS 標準の rm を利用できる状態にしてください')
+  ID_BIN=$(require_command id 'macOS 標準の id を利用できる状態にしてください')
+  SLEEP_BIN=$(require_command sleep 'macOS 標準の sleep を利用できる状態にしてください')
+}
+
+release_master_lock() {
+  if [[ $MASTER_LOCK_HELD -ne 1 ]]; then
+    return
+  fi
+
+  "$RM_BIN" -f -- "$MASTER_LOCK_DIR/pid" 2>/dev/null || true
+  "$RMDIR_BIN" "$MASTER_LOCK_DIR" 2>/dev/null || true
+  MASTER_LOCK_HELD=0
+}
+
+cancel_forward() {
+  if [[ $FORWARD_ACTIVE -ne 1 ]]; then
+    return
+  fi
+
+  "$SSH_BIN" "${SSH_OPTIONS[@]}" -O cancel -L "$FORWARD_SPEC" -- "$BASTION" >/dev/null 2>&1 || true
+  FORWARD_ACTIVE=0
+}
+
+cleanup() {
+  local status=$?
+
+  trap - EXIT INT TERM
+  cancel_forward
+  release_master_lock
+
+  if [[ -n $TEMP_DIR && -d $TEMP_DIR ]]; then
+    "$RM_BIN" -rf -- "$TEMP_DIR" || true
+    TEMP_DIR=""
+  fi
+
+  return "$status"
+}
+
+handle_signal() {
+  local status=$1
+
+  trap - INT TERM
+  cleanup || true
+  exit "$status"
+}
+
+install_traps() {
+  trap cleanup EXIT
+  trap 'handle_signal 130' INT
+  trap 'handle_signal 143' TERM
+}
+
+print_missing_targets_help() {
+  printf '%s\n' \
+    "dbx: 接続先定義が見つかりません: $TARGETS_FILE" \
+    'dbx: ~/.config/dbx/targets.json を chezmoi 管理外で作成してください。' \
+    'dbx: 例:' \
+    '{' \
+    '  "project/stg/main": {' \
+    '    "description": "STG primary database",' \
+    '    "bastion": "stg-bastion",' \
+    '    "host": "database.internal",' \
+    '    "port": 3306,' \
+    '    "driver": "mysql",' \
+    '    "database": "application",' \
+    '    "credential": {' \
+    '      "type": "file",' \
+    '      "path": "db/credentials.json",' \
+    '      "jq": ".stg.main"' \
+    '    }' \
+    '  }' \
+    '}' >&2
+}
+
+validate_targets() {
+  local validation_error
+
+  if [[ ! -f $TARGETS_FILE ]]; then
+    print_missing_targets_help
+    exit 1
+  fi
+  if [[ ! -r $TARGETS_FILE ]]; then
+    die "接続先定義を読み取れません: $TARGETS_FILE"
+  fi
+
+  if ! validation_error=$(
+    "$JQ_BIN" -e '
+      def nonempty_string:
+        type == "string" and length > 0;
+      def integer:
+        type == "number" and . == floor;
+      def valid_credential:
+        type == "object"
+        and (
+          if .type == "file" then
+            (.path | nonempty_string)
+            and (.path | startswith("/") | not)
+            and (.jq | nonempty_string)
+          elif .type == "ssm" then
+            (.path | nonempty_string)
+            and (.profile | nonempty_string)
+          else
+            false
+          end
+        );
+      def valid_target:
+        type == "object"
+        and (.description | type == "string")
+        and (.bastion | nonempty_string)
+        and (.host | nonempty_string)
+        and (.port | integer)
+        and (.driver == "mysql" or .driver == "postgres")
+        and (.database | nonempty_string)
+        and (.credential | valid_credential);
+
+      if type != "object" then
+        error("ルートはオブジェクトである必要があります")
+      else
+        to_entries as $entries
+        | (
+            $entries
+            | map(select((.key | test("^[A-Za-z0-9_/-]+$")) | not))
+            | .[0].key // null
+          ) as $bad_key
+        | if $bad_key != null then
+            error("不正なターゲットキー: \($bad_key)")
+          else
+            (
+              $entries
+              | map(select((.value | valid_target) | not))
+              | .[0].key // null
+            ) as $bad_target
+            | if $bad_target != null then
+                error("ターゲット定義が不正です: \($bad_target)")
+              else
+                true
+              end
+          end
+      end
+    ' "$TARGETS_FILE" 2>&1 >/dev/null
+  ); then
+    printf 'dbx: targets.json の検証に失敗しました: %s\n' "$TARGETS_FILE" >&2
+    printf '%s\n' "$validation_error" >&2
+    exit 1
+  fi
+}
+
+init_temp_dir() {
+  if [[ -z ${TMPDIR:-} ]]; then
+    die 'TMPDIR が設定されていません'
+  fi
+
+  TEMP_DIR=$("$MKTEMP_BIN" -d "${TMPDIR%/}/dbx.XXXXXXXX")
+  USQL_CONFIG_FILE="$TEMP_DIR/config.yaml"
+  FORWARD_SOCKET="$TEMP_DIR/forward.sock"
+}
+
+target_exists() {
+  local target=$1
+
+  "$JQ_BIN" -e --arg target "$target" 'has($target)' "$TARGETS_FILE" >/dev/null
+}
+
+read_target_field() {
+  local target=$1
+  local filter=$2
+
+  "$JQ_BIN" -er --arg target "$target" ".[\$target] | $filter" "$TARGETS_FILE"
+}
+
+configure_control_master() {
+  local bastion=$1
+  local digest
+  local uid
+
+  if ! digest=$(printf '%s' "$bastion" | "$PYTHON_BIN" -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])'); then
+    die 'ControlPath の生成に失敗しました'
+  fi
+  uid=$("$ID_BIN" -u)
+
+  # macOS の長い $TMPDIR では sockaddr_un の 104 バイト制約を超え得るため、ControlPath だけは /tmp に置く。
+  CONTROL_PATH="/tmp/dbx-cm-${uid}-${digest}.sock"
+  MASTER_LOCK_DIR="/tmp/dbx-cm-${uid}-${digest}.lock"
+  BASTION=$bastion
+  SSH_OPTIONS=(
+    -o "ControlPath=$CONTROL_PATH"
+    -o ControlPersist=600
+    -o ExitOnForwardFailure=yes
+    -o ConnectTimeout=10
+    -o ServerAliveInterval=30
+    -o StreamLocalBindUnlink=yes
+  )
+}
+
+master_is_alive() {
+  "$SSH_BIN" "${SSH_OPTIONS[@]}" -O check -- "$BASTION" >/dev/null 2>&1
+}
+
+acquire_master_lock() {
+  local attempts=0
+  local owner=""
+
+  while ! "$MKDIR_BIN" "$MASTER_LOCK_DIR" 2>/dev/null; do
+    if master_is_alive; then
+      return
+    fi
+
+    if [[ -r $MASTER_LOCK_DIR/pid ]]; then
+      owner=$(<"$MASTER_LOCK_DIR/pid")
+      if [[ $owner =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
+        "$RM_BIN" -f -- "$MASTER_LOCK_DIR/pid" 2>/dev/null || true
+        "$RMDIR_BIN" "$MASTER_LOCK_DIR" 2>/dev/null || true
+        continue
+      fi
+    fi
+
+    attempts=$((attempts + 1))
+    if ((attempts >= 150)); then
+      # mkdir の直後にプロセスが強制終了した場合だけ、所有者情報のない空ロックを回収する。
+      if [[ ! -e $MASTER_LOCK_DIR/pid ]] && "$RMDIR_BIN" "$MASTER_LOCK_DIR" 2>/dev/null; then
+        attempts=0
+        continue
+      fi
+      die "ControlMaster 起動ロックの待機がタイムアウトしました: $MASTER_LOCK_DIR"
+    fi
+    "$SLEEP_BIN" 0.1
+  done
+
+  MASTER_LOCK_HELD=1
+  printf '%s\n' "$$" >"$MASTER_LOCK_DIR/pid"
+}
+
+ensure_control_master() {
+  if master_is_alive; then
+    return
+  fi
+
+  acquire_master_lock
+  if master_is_alive; then
+    release_master_lock
+    return
+  fi
+
+  # bind 失敗を ControlMaster に記憶させないため、マスター起動時には -L を渡さない。
+  # -M は付けない。-o ControlMaster=yes と併用すると OpenSSH が ControlMaster=ask へ格上げし、
+  # 以後の -O forward が ssh-askpass での確認を要求して `Master refused forwarding request: Permission denied` で失敗する。
+  "$RM_BIN" -f -- "$CONTROL_PATH"
+  if ! "$SSH_BIN" "${SSH_OPTIONS[@]}" -o ControlMaster=yes -Nf -- "$BASTION"; then
+    die "ControlMaster を起動できませんでした: $BASTION"
+  fi
+  if ! master_is_alive; then
+    die "起動後の ControlMaster を確認できませんでした: $BASTION"
+  fi
+
+  release_master_lock
+}
+
+open_forward() {
+  local host=$1
+  local port=$2
+
+  FORWARD_SPEC="${FORWARD_SOCKET}:${host}:${port}"
+  if ! "$SSH_BIN" "${SSH_OPTIONS[@]}" -O forward -L "$FORWARD_SPEC" -- "$BASTION"; then
+    die "SSH ポートフォワードを作成できませんでした: $BASTION"
+  fi
+  FORWARD_ACTIVE=1
+
+  if [[ ! -S $FORWARD_SOCKET ]]; then
+    die "SSH ポートフォワードの Unix ソケットを確認できませんでした: $FORWARD_SOCKET"
+  fi
+  if ! master_is_alive; then
+    die "SSH ポートフォワード作成後に ControlMaster が停止しました: $BASTION"
+  fi
+}
+
+load_credential_url() {
+  local target=$1
+  local credential_type
+  local credential_path
+  local credential_jq
+  local credential_profile
+  local credential_file
+  local credential_url
+
+  credential_type=$(read_target_field "$target" '.credential.type')
+  credential_path=$(read_target_field "$target" '.credential.path')
+
+  case $credential_type in
+    file)
+      credential_jq=$(read_target_field "$target" '.credential.jq')
+      credential_file="$HOME/.config/$credential_path"
+      if [[ ! -f $credential_file || ! -r $credential_file ]]; then
+        die "認証情報ファイルを読み取れません: $credential_file"
+      fi
+      if ! credential_url=$(
+        "$JQ_BIN" -er \
+          "[($credential_jq)] | if length == 1 and (.[0] | type) == \"string\" and (.[0] | length) > 0 then .[0] else error(\"認証情報 URL を1件取得できませんでした\") end" \
+          "$credential_file"
+      ); then
+        die "認証情報 URL の取得に失敗しました: $credential_file"
+      fi
+      ;;
+    ssm)
+      AWS_BIN=$(require_command aws 'brew install awscli')
+      credential_profile=$(read_target_field "$target" '.credential.profile')
+      if ! credential_url=$(
+        "$AWS_BIN" ssm get-parameter \
+          --with-decryption \
+          --name "$credential_path" \
+          --profile "$credential_profile" |
+          "$JQ_BIN" -er '.Parameter.Value | select(type == "string" and length > 0)'
+      ); then
+        die "SSM Parameter Store から認証情報 URL を取得できませんでした: $credential_path"
+      fi
+      ;;
+    *)
+      die "未対応の credential.type です: $credential_type"
+      ;;
+  esac
+
+  printf '%s' "$credential_url" >"$TEMP_DIR/credential-url"
+}
+
+write_usql_config() {
+  local driver=$1
+  local database=$2
+  local mode=$3
+
+  DBX_DRIVER=$driver \
+    DBX_DATABASE=$database \
+    DBX_SOCKET=$FORWARD_SOCKET \
+    DBX_CREDENTIAL_FILE="$TEMP_DIR/credential-url" \
+    DBX_CONFIG_FILE=$USQL_CONFIG_FILE \
+    DBX_MODE=$mode \
+    "$PYTHON_BIN" - <<'PY'
+import os
+import sys
+from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit
+
+credential_url = Path(os.environ["DBX_CREDENTIAL_FILE"]).read_text(encoding="utf-8")
+
+try:
+    parsed = urlsplit(credential_url)
+    username = parsed.username
+    password = parsed.password
+except ValueError as error:
+    print(f"dbx: 認証情報 URL が不正です: {error}", file=sys.stderr)
+    raise SystemExit(1) from error
+
+if not parsed.scheme or not parsed.netloc or username is None or password is None:
+    print("dbx: 認証情報 URL から username と password を取得できません", file=sys.stderr)
+    raise SystemExit(1)
+
+driver = os.environ["DBX_DRIVER"]
+database = os.environ["DBX_DATABASE"]
+socket_path = os.environ["DBX_SOCKET"]
+mode = os.environ["DBX_MODE"]
+
+dsn = (
+    f"{driver}+unix://"
+    f"{quote(unquote(username), safe='')}:{quote(unquote(password), safe='')}"
+    f"@{quote(socket_path, safe='/')}/{quote(database, safe='')}"
+)
+yaml_dsn = dsn.replace("'", "''")
+
+lines = [
+    "connections:",
+    f"  target: '{yaml_dsn}'",
+]
+
+if mode == "shell":
+    lines.extend([
+        "",
+        "init: |",
+        r"  \begin -read-only",
+    ])
+    if driver == "mysql":
+        lines.append("  SET SESSION sql_mode='';")
+
+Path(os.environ["DBX_CONFIG_FILE"]).write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+}
+
+prepare_connection() {
+  local target=$1
+  local mode=$2
+  local bastion
+  local host
+  local port
+  local driver
+  local database
+
+  if ! target_exists "$target"; then
+    printf 'dbx: 未定義のターゲットです: %s\n' "$target" >&2
+    printf 'dbx: dbx ls で定義済みターゲットを確認してください。\n' >&2
+    exit 1
+  fi
+
+  bastion=$(read_target_field "$target" '.bastion')
+  host=$(read_target_field "$target" '.host')
+  port=$(read_target_field "$target" '.port')
+  driver=$(read_target_field "$target" '.driver')
+  database=$(read_target_field "$target" '.database')
+
+  printf -- '-> %s (%s, %s)\n' "$target" "$driver" "$database" >&2
+
+  init_temp_dir
+  configure_control_master "$bastion"
+  ensure_control_master
+  open_forward "$host" "$port"
+  load_credential_url "$target"
+  write_usql_config "$driver" "$database" "$mode"
+
+  TARGET_DRIVER=$driver
+}
+
+run_query() {
+  local target=$1
+  local sql=$2
+  local status
+  local usql_args=(-X -w -q -J -c '\begin -read-only')
+
+  prepare_connection "$target" query
+  if [[ $TARGET_DRIVER == mysql ]]; then
+    usql_args+=(-c "SET SESSION sql_mode=''")
+  fi
+  usql_args+=(-c "$sql" target)
+
+  set +e
+  TZ=UTC USQL_CONFIG="$USQL_CONFIG_FILE" "$USQL_BIN" "${usql_args[@]}"
+  status=$?
+  set -e
+
+  return "$status"
+}
+
+run_shell() {
+  local target=$1
+  local status
+
+  prepare_connection "$target" shell
+  "$MKDIR_BIN" "$TEMP_DIR/home"
+
+  # 対話モードでは生成済みの init を読む必要があるため -X を外し、空の HOME で利用者の初期化ファイルを隔離する。
+  set +e
+  HOME="$TEMP_DIR/home" TZ=UTC USQL_CONFIG="$USQL_CONFIG_FILE" "$USQL_BIN" -w target
+  status=$?
+  set -e
+
+  return "$status"
+}
+
+list_targets() {
+  local names_only=$1
+
+  if [[ $names_only -eq 1 ]]; then
+    "$JQ_BIN" -r 'keys | sort[]' "$TARGETS_FILE"
+  else
+    "$JQ_BIN" -r 'to_entries | sort_by(.key)[] | [.key, .value.description] | @tsv' "$TARGETS_FILE"
+  fi
+}
+
+reset_master() {
+  local bastion=$1
+  local status
+
+  configure_control_master "$bastion"
+  printf -- '-> %s (ControlMaster)\n' "$bastion" >&2
+
+  set +e
+  "$SSH_BIN" "${SSH_OPTIONS[@]}" -O exit -- "$bastion"
+  status=$?
+  set -e
+
+  return "$status"
+}
+
+main() {
+  local command_name=${1:-}
+  local sql
+
+  resolve_commands
+  install_traps
+
+  case $command_name in
+    query)
+      if (($# < 2 || $# > 3)); then
+        usage >&2
+        exit 2
+      fi
+      validate_targets
+      if (($# == 3)) && [[ -n $3 ]]; then
+        sql=$3
+      else
+        sql=$(</dev/stdin)
+      fi
+      run_query "$2" "$sql"
+      ;;
+    shell)
+      if (($# != 2)); then
+        usage >&2
+        exit 2
+      fi
+      validate_targets
+      run_shell "$2"
+      ;;
+    ls)
+      if (($# == 1)); then
+        validate_targets
+        list_targets 0
+      elif (($# == 2)) && [[ $2 == --names ]]; then
+        validate_targets
+        list_targets 1
+      else
+        usage >&2
+        exit 2
+      fi
+      ;;
+    reset)
+      if (($# != 2)); then
+        usage >&2
+        exit 2
+      fi
+      reset_master "$2"
+      ;;
+    -h | --help | help)
+      usage
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

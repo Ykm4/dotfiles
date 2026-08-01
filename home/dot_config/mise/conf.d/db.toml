@@ -1,0 +1,27 @@
+[tasks."db:query"]
+description = "踏み台経由で DB にクエリを投げる（JSON 出力）"
+usage = '''
+arg "<target>" help="接続先。db:ls で一覧できる"
+arg "[sql]" help="実行する SQL。省略時は標準入力から読む"
+complete "target" run="{{vars.dbx}} ls --names"
+'''
+run = '"{{vars.dbx}}" query "${usage_target?}" "${usage_sql:-}"'
+
+[tasks."db:shell"]
+description = "踏み台経由で DB の対話セッションを開く"
+usage = '''
+arg "<target>" help="接続先。db:ls で一覧できる"
+complete "target" run="{{vars.dbx}} ls --names"
+'''
+run = '"{{vars.dbx}}" shell "${usage_target?}"'
+
+[tasks."db:ls"]
+description = "踏み台経由 DB の接続先を一覧表示する"
+run = '"{{vars.dbx}}" ls'
+
+[tasks."db:reset"]
+description = "指定した踏み台の SSH ControlMaster を停止する"
+usage = '''
+arg "<bastion>" help="停止する踏み台の SSH ホスト名またはエイリアス"
+'''
+run = '"{{vars.dbx}}" reset "${usage_bastion?}"'
