@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Google の認証をやり直す（ブラウザが開く。gws と gcloud に共通の唯一の入口）"
+# 資格情報の正本を gws のプロファイル（~/.config/gws/<profile>/credentials.enc）へ一本化している。
+# gcloud 側は google:gcloud が都度アクセストークンを受け取るので、gcloud auth login は使わない。
+# 入口を1つにしておかないと、gws と gcloud で別々に期限が切れて再ログインが二重になる。
+#
+# 使い方: mise run google:auth [profile]
+#   例: mise run google:auth personal
+set -euo pipefail
+
+profile="${1:-hucom-system}"
+cfg="${HOME}/.config/gws/${profile}"
+
+if [ ! -d "${cfg}" ]; then
+  printf 'gws プロファイルが無い: %s\n' "${profile}" >&2
+  printf '使えるプロファイル: %s\n' "$(command ls "${HOME}/.config/gws" 2>/dev/null | tr '\n' ' ')" >&2
+  exit 1
+fi
+
+printf 'gws の認証を開始する (profile=%s)。ブラウザが開く。\n\n' "${profile}"
+GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${cfg}" gws auth login
+
+printf '\n完了した。\n'
+printf 'gcloud を使うときは mise run google:gcloud %s <引数> を通す（gcloud auth login は不要）。\n' "${profile}"

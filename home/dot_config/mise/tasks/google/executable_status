@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#MISE description="gws と gcloud の認証状態をまとめて表示する（秘密は出さない）"
+# 再認証が要るかどうかを1画面で判断するためのタスクである。
+# gws 側の token_valid が false なら mise run google:auth <profile> を実行する。
+set -uo pipefail
+
+printf '=== gws（資格情報の正本）===\n'
+for cfg in "${HOME}"/.config/gws/*/; do
+  [ -d "${cfg}" ] || continue
+  p=$(basename "${cfg}")
+  out=$(GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${cfg}" gws auth status 2>/dev/null | sed -n '/^{/,$p')
+  if [ -z "${out}" ]; then
+    printf '  %s\n    状態を取得できない（未設定のプロファイルである可能性がある）\n' "${p}"
+    continue
+  fi
+  printf '%s' "${out}" | jq -r --arg p "${p}" '
+    "  \($p)\n" +
+    "    トークン: " + (if .token_valid then "有効" else "失効" end) +
+    "  project: \(.project_id // "-")" +
+    "  スコープ: \(.scope_count // 0)個" +
+    (if (.token_error // "") != "" then "\n    error: \(.token_error)" else "" end)'
+done
+
+printf '\n=== gcloud（configuration の対応）===\n'
+gcloud config configurations list \
+  --format="table[box](name,is_active,properties.core.account,properties.core.project)" 2>/dev/null \
+  || printf '  gcloud の設定を読めない\n'
+
+printf '\n注記: gcloud の資格情報は google:gcloud が都度渡すため、gcloud auth login の期限切れは無視してよい。\n'
+printf '再認証が要るときは mise run google:auth <profile> を実行する。\n'

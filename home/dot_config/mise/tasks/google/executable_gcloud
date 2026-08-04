@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#MISE description="gws の資格情報で gcloud を実行する（gcloud 側の再ログインが要らない）"
+# 仕組み: gws が保持する refresh token をアクセストークンへ交換し、gcloud の --access-token-file へ渡す。
+# gcloud 自身の資格情報（~/.config/gcloud）は参照しないので、gcloud auth login の期限切れに影響されない。
+#
+# 秘密の扱い:
+#   - refresh token・client secret・access token を標準出力と標準エラーへ一切出さない。
+#   - 中間ファイルは umask 077 の mktemp で作り、trap で必ず消す。
+#   - シェル変数に秘密を置かない（ファイル経由でのみ受け渡す）。
+#
+# 使い方: mise run google:gcloud <gws-profile> <gcloud の引数...>
+#   例: mise run google:gcloud personal dns managed-zones list
+#   例: mise run google:gcloud personal dns record-sets list --zone=example-zone
+set -euo pipefail
+set +x
+umask 077
+
+if [ $# -lt 1 ]; then
+  printf '使い方: mise run google:gcloud <gws-profile> <gcloud の引数...>\n' >&2
+  exit 2
+fi
+
+profile="$1"
+shift
+
+cfg="${HOME}/.config/gws/${profile}"
+if [ ! -d "${cfg}" ]; then
+  printf 'gws プロファイルが無い: %s\n' "${profile}" >&2
+  exit 1
+fi
+
+cred=$(mktemp)
+resp=$(mktemp)
+tok=$(mktemp)
+trap 'rm -f "${cred}" "${resp}" "${tok}"' EXIT
+
+if ! GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${cfg}" gws auth export --unmasked >"${cred}" 2>/dev/null; then
+  printf '資格情報を取り出せない。mise run google:auth %s で認証する。\n' "${profile}" >&2
+  exit 1
+fi
+
+# @uri を通すのは、client_secret と refresh_token に + や / が入りうるためである。
+jq -rj '[
+  "client_id="     + (.client_id|@uri),
+  "client_secret=" + (.client_secret|@uri),
+  "refresh_token=" + (.refresh_token|@uri),
+  "grant_type=refresh_token"
+] | join("&")' <"${cred}" \
+  | curl -sS -X POST "https://oauth2.googleapis.com/token" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      --data-binary @- -o "${resp}"
+
+jq -r '.access_token // empty' <"${resp}" >"${tok}"
+if [ ! -s "${tok}" ]; then
+  jq -r '"認証に失敗した: \(.error // "unknown") \(.error_description // "")"' <"${resp}" >&2
+  printf 'mise run google:auth %s で認証をやり直す。\n' "${profile}" >&2
+  exit 1
+fi
+
+# gws プロファイルと同名の gcloud configuration があれば、プロジェクトと既定値をそちらへ揃える。
+if gcloud config configurations list --format="value(name)" 2>/dev/null | grep -qxF "${profile}"; then
+  export CLOUDSDK_ACTIVE_CONFIG_NAME="${profile}"
+fi
+
+# exec は使わない。trap を通してトークンファイルを確実に消すためである。
+gcloud --access-token-file="${tok}" "$@"
