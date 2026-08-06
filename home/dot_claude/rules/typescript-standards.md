@@ -255,6 +255,39 @@ function handleOrder(order: Order) {
 }
 ```
 
+### Prefer explicit type definitions over utility-type composition
+
+Shared types — port contracts, repository return types, module boundaries —
+should spell out their fields explicitly. Do not build them by composing
+`Omit` / `Pick` / intersections, or by deriving from another layer's schema
+(`Static<typeof Schema>`, `ReturnType<...>`).
+
+```typescript
+// Bad — the shape is invisible without mentally expanding the composition
+export type ListItem = Omit<ClientResponse, 'internalId' | 'items'> & {
+  id: string
+  items: (Omit<ClientItem, 'updatedAt'> & { updatedAt: Date })[]
+}
+
+// Good — the shape is readable at a glance; structural typing still
+// verifies conformance wherever the value is assigned
+export type ListItem = {
+  id: string
+  name: string
+  items: {
+    itemId: string
+    updatedAt: Date
+  }[]
+}
+```
+
+- Duplication is low-risk: if an explicit type drifts from its source,
+  assignment at the consuming boundary fails to compile.
+- Keep it in one type: don't extract a non-exported sub-type per nesting
+  level — inline the nesting.
+- Local, single-field transformations inside one file, and `Partial<T>`
+  overrides in test fixtures, are fine — this rule targets shared contracts.
+
 ### Prefer immutability — const, readonly, spread
 
 Default to `const`. Use `readonly` for properties not reassigned after construction.
