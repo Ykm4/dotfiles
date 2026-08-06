@@ -1,4 +1,5 @@
 {
+  "cleanupPeriodDays": 20,
   "env": {
     "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
     "ENABLE_TOOL_SEARCH": "true"
@@ -12,21 +13,15 @@
       "Skill(agent-browser)",
       "Bash(npx agent-browser *)",
       "Bash(agent-browser *)",
-      "Skill(cmux-browser)",
       "Bash(cmux browser *)",
       "Skill(find-skills)",
       "Bash(npx skills *)",
       "Skill(mf-expense)",
-      "Skill(agents-sdk)",
-      "Skill(durable-objects)",
-      "Skill(ghostty-theme)",
+      "Skill(ghostty-config)",
       "Skill(mermaid-diagrams)",
-      "Skill(recover)",
       "Skill(self-review)",
       "Skill(skill-creator)",
       "Skill(skill-lint)",
-      "Skill(stack-guide-ts)",
-      "Skill(wrangler)",
       "Bash(skills *)",
       "WebSearch",
       "Bash(mkdir *)",
@@ -43,6 +38,9 @@
       "Bash(brew *)",
       "Bash(hono *)",
       "Bash(mise *)",
+      "Bash(mise run google:*)",
+      "Bash(mise run cf:admin GET *)",
+      "Bash(mise run cf:admin POST *)",
       "Bash(node -e *)",
       "Bash(docker compose *)",
       "Bash(docker inspect *)",
@@ -57,10 +55,7 @@
       "Bash(printenv *)",
       "Read(.env)",
       "Read(.env.*)",
-      "Read(.env.*)",
       "Read(~/.aws/**)",
-      "Bash(cat .env*)",
-      "Bash(cat ~/.zshrc)",
       "Bash(cat ~/.aws/**)",
       "Bash(cat ~/.config/gh/hosts.yml)",
       "Bash(cat ~/.docker/config.json)",
@@ -73,11 +68,9 @@
       "Bash(bat ~/.aws/**)",
       "Bash(bat ~/.ssh/**)",
       "Bash(grep * .env*)",
-      "Bash(grep * ~/.zshrc)",
       "Bash(grep * ~/.aws/**)",
       "Bash(grep * ~/.ssh/**)",
       "Bash(rg * .env*)",
-      "Bash(rg * ~/.zshrc)",
       "Bash(rg * ~/.aws/**)",
       "Bash(rg * ~/.ssh/**)",
       "Read(~/.config/gh/hosts.yml)",
@@ -95,14 +88,21 @@
       "Bash(find * -exec *)",
       "Bash(find * -delete *)",
       "Bash(find * -execdir *)",
-      "Bash(git -C *)",
+      "Bash(git push)",
       "Bash(git push * main)",
       "Bash(git push *:main)",
       "Bash(gh pr merge *)",
       "Bash(gh pr merge)",
-      "Bash(gh api *merge*)"
+      "Bash(gh api *merge*)",
+      "Read(~/.config/*/env)",
+      "Edit(~/.config/*/env)",
+      "Bash(grep * ~/.config/*/env)",
+      "Bash(rg * ~/.config/*/env)"
     ],
     "ask": [
+      "Bash(mise run cf:admin PUT *)",
+      "Bash(mise run cf:admin PATCH *)",
+      "Bash(mise run cf:admin DELETE *)",
       "Bash(agent-browser set credentials *)",
       "Bash(docker compose exec *)",
       "Bash(brew services stop *)",
@@ -114,7 +114,6 @@
       "~/.config/mise/"
     ]
   },
-  "model": "claude-fable-5[1m]",
   "hooks": {
     "Stop": [
       {
@@ -150,11 +149,21 @@
     "slack@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": true
+    "plugin-dev@claude-plugins-official": false,
+    "cloudflare@cloudflare": true
+  },
+  "extraKnownMarketplaces": {
+    "cloudflare": {
+      "source": {
+        "source": "github",
+        "repo": "cloudflare/skills"
+      }
+    }
   },
   "language": "Japanese",
   "alwaysThinkingEnabled": true,
   "effortLevel": "xhigh",
+  "awaySummaryEnabled": true,
   "autoUpdatesChannel": "latest",
   "minimumVersion": "2.1.76",
   "tui": "fullscreen",
@@ -164,7 +173,5 @@
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "skipAutoPermissionPrompt": true,
-  "cleanupPeriodDays": 20,
-  "awaySummaryEnabled": true
+  "skipAutoPermissionPrompt": true
 }
