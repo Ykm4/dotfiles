@@ -89,7 +89,7 @@ THREADS="$(echo "$THREADS" | jq --argjson tid "$TARGET_COMMENT_DB_ID" \
 ${CLAUDE_SKILL_DIR}/scripts/fetch-unresolved-threads.sh "$OWNER" "$NAME" "$PR_NUMBER"
 ```
 
-返り値は `[{ id, isOutdated, path, comments: [...] }]` の JSON 配列。各スレッドの `id`（GraphQL node ID）は後の resolve で使う。100 件超の thread を持つ PR ではスクリプトを拡張する必要がある。
+返り値は `[{ id, isOutdated, path, comments: [...] }]` の JSON 配列。各スレッドの `id`（GraphQL node ID）は後の resolve で使う。取得上限（thread 100 件・thread あたりコメント 20 件）を超えた分がある場合は WARNING が stderr に出るので、未取得分は手動で確認する。
 
 ### Step 3: 仕分け
 
