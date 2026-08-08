@@ -44,20 +44,25 @@ fi
 
 check=check_cask_corrupt_dirs
 if ! printf '%s\n' "$checks" | grep -qxF "$check"; then
-  # 改名に追随する。Caskroom の破損を見るチェックは現状これ1つで、名前に corrupt を含む。
-  check="$(printf '%s\n' "$checks" | grep -E '^check_.*corrupt' | head -n 1)"
-fi
-
-if [ -z "$check" ]; then
-  echo "WARN: brew doctor に Caskroom の破損を見るチェックが無い。" >&2
-  echo "Homebrew 側で削除された可能性がある。検査を飛ばして掃除へ進む。" >&2
-  echo "conf.d/brew.toml のチェック名を見直すこと。" >&2
-  exit 0
+  # 改名に追随する。cask と corrupt の両方を名前に含むものだけを候補にし、一意に決まらなければ止める。
+  # ここを fail-open にすると brew:upgrade 単体は無検査で成功扱いになる一方、brew:cleanup の
+  # 二重の門は旧名を直書きしているので失敗する。入口ごとに結果が食い違うため fail-closed にする。
+  matches="$(printf '%s\n' "$checks" | grep -E '^check_.*(cask.*corrupt|corrupt.*cask)' || true)"
+  count="$(printf '%s\n' "$matches" | grep -c . || true)"
+  if [ "$count" -ne 1 ]; then
+    echo "ERROR: brew doctor の Caskroom 破損チェックを一意に特定できない（候補 $count 件）。" >&2
+    echo "Homebrew 側で改名または削除された可能性がある。conf.d/brew.toml のチェック名を見直すこと。" >&2
+    echo "brew:cleanup も同じ名前を直書きしているので、必ず両方そろえること。" >&2
+    exit 1
+  fi
+  check="$matches"
+  echo "WARN: check_cask_corrupt_dirs が無いため $check を使った。設定の見直しが要る。" >&2
 fi
 
 if ! brew doctor "$check"; then
   echo "ERROR: Caskroom のメタデータ検査（$check）に失敗した。" >&2
-  echo "更新タスクは完了している。brew autoremove と brew cleanup だけを実行していない。" >&2
+  echo "tools:update からの実行なら更新タスクは完了している。" >&2
+  echo "brew autoremove と brew cleanup だけを実行していない。" >&2
   echo "上に出た brew reinstall --cask --force を確認してから手で実行すること。" >&2
   exit 1
 fi
@@ -88,7 +93,7 @@ description = "Homebrew パッケージを更新し、破損検査のうえ掃�
 depends = ["brew:upgrade", "brew:cleanup"]
 
 [tasks."brewfile:audit"]
-description = "Brewfile と実機の乖離を確認（削除候補・未充足・pin 済みの列挙。--force を付けないので削除はしない）"
+description = "Brewfile と実機の乖離を確認（stdin を /dev/null に固定し、削除せず列挙する）"
 # XDG_CONFIG_HOME があると --global の参照先が ~/.config/homebrew/Brewfile に変わるため、明示的に固定する。
 env = { HOMEBREW_BUNDLE_FILE_GLOBAL = "{{env.HOME}}/.Brewfile" }
 run = '''
@@ -114,5 +119,6 @@ brew bundle check --global --verbose --no-upgrade || true
 echo "== pin 済み（brew upgrade / brew bundle の対象外。解除条件は conf.d/gcloud.toml のコメント参照） =="
 # pin 済みは brew upgrade でも brew bundle でも対象外になり、上の2つには絶対に現れない。
 # --formula と --cask を指定しないと両方を走査するので、1コマンドで足りる。
-brew list --pinned --versions || true
+# pin が1つも無くても正常終了するため握り潰さない。異常終了は監査の失敗として扱う。
+brew list --pinned --versions
 '''

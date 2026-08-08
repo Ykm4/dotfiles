@@ -23,6 +23,16 @@ fi
 profile="$1"
 shift
 
+# gcloud の所在を解決する。cask のロールバックで /opt/homebrew/bin/gcloud のシンボリックリンクが
+# 失われても動くよう、share 配下の実体を優先する（conf.d/gcloud.toml と同じ方針）。
+brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+gcloud_cli="${brew_prefix}/share/google-cloud-sdk/bin/gcloud"
+[ -x "${gcloud_cli}" ] || gcloud_cli="$(command -v gcloud || true)"
+if [ -z "${gcloud_cli}" ] || [ ! -x "${gcloud_cli}" ]; then
+  printf 'gcloud CLI が見つからない。brew bundle install --global で導入する。\n' >&2
+  exit 1
+fi
+
 cfg="${HOME}/.config/gws/${profile}"
 if [ ! -d "${cfg}" ]; then
   printf 'gws プロファイルが無い: %s\n' "${profile}" >&2
@@ -58,9 +68,9 @@ if [ ! -s "${tok}" ]; then
 fi
 
 # gws プロファイルと同名の gcloud configuration があれば、プロジェクトと既定値をそちらへ揃える。
-if gcloud config configurations list --format="value(name)" 2>/dev/null | grep -qxF "${profile}"; then
+if "${gcloud_cli}" config configurations list --format="value(name)" 2>/dev/null | grep -qxF "${profile}"; then
   export CLOUDSDK_ACTIVE_CONFIG_NAME="${profile}"
 fi
 
 # exec は使わない。trap を通してトークンファイルを確実に消すためである。
-gcloud --access-token-file="${tok}" "$@"
+"${gcloud_cli}" --access-token-file="${tok}" "$@"

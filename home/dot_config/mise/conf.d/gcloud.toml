@@ -13,11 +13,17 @@
 #       gcloud config virtualenv の delete / create / enable は pip の外部取得を伴うため必ず失敗し、
 #       cask/installer.rb のロールバックが Caskroom のバージョンディレクトリ・メタデータ・
 #       binary シンボリックリンクを巻き戻す。2026-08-09 に実際に発生した。
-# 解除条件: 上流 cask の postflight_steps から config virtualenv の delete / create / enable が消えること。
-#           確認は brew info --cask gcloud-cli --json=v2 | grep -c '"virtualenv"' を使う。
-#           3 なら据え置き、0 になったら brew unpin --cask gcloud-cli してよい。
+# 解除条件: postflight の HOME 依存・ネットワーク依存の処理がサンドボックスの外へ移るか消えること。
+#           あるいは Homebrew 本体側でその処理を許可する修正が入ること。どちらか一方で足りる。
 #           バージョンが上がっただけでは解除条件を満たさない。版上げは version と sha256 しか変えない。
+#           確認は件数ではなく structured run の中身を目視する。件数では、本体側の修正で安全になった場合や、
+#           別名のネットワーク依存コマンドへ置き換わった場合を取り違える。
+#           grep -c は 0 件でも終了コード 1 を返すので判定に使わない。
+#             brew info --json=v2 --cask gcloud-cli \
+#               | jq '[.casks[0].artifacts[]? | .postflight_steps? // empty | .[].steps[]?
+#                      | select(.type == "run") | {command, args, env, guards}]'
 #           brew cat --cask gcloud-cli は API モードでは使えないので判断に使わない。
+#           手順の全体は dotfiles の docs/runbooks/gcloud-cli-homebrew-sandbox.md にある。
 # 可視化: pin は brew upgrade でも brew bundle でも沈黙する。
 #         mise r brewfile:audit の「pin 済み」欄でのみ確認できる。
 
