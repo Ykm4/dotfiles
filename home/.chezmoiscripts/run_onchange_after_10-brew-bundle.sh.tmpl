@@ -4,4 +4,24 @@ set -eu
 eval "$(/opt/homebrew/bin/brew shellenv)"
 # ~/.zshenv の同名 export と同期を保つ（値を変えるときは両方）
 export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
+
+# gcloud-cli を一時的に除外する。
+# Homebrew 6.0.15 の f8fcbd88e0（2026-08-07「Sandbox structured cask operations」）以降、cask の
+# postflight は HOME を差し替えネットワークを遮断したサンドボックスで実行される。gcloud-cli の
+# postflight は virtualenv 作成で pip の外部取得を行うため必ず失敗する。
+# brew bundle は失敗しても残りを全部インストールしてから非ゼロで終わるが、set -e でここが止まると
+# 後続の chezmoi スクリプト（20-mise-install 以降）が1つも走らず、新マシンの構築が中断する。
+#
+# Brewfile の cask "gcloud-cli" は外さないこと。外すと brew bundle cleanup が未宣言 cask と見なし、
+# 将来の force cleanup で削除対象になる。pin は force uninstall の防壁にはならない。
+# 導入と復旧の手順は docs/runbooks/gcloud-cli-homebrew-sandbox.md にある。
+# 上流が直ったらこの export と警告の数行を消す。run_onchange なので内容が変われば再実行され、
+# 次の chezmoi apply で gcloud-cli が正規の経路で導入される。
+existing_cask_skip="${HOMEBREW_BUNDLE_CASK_SKIP-}"
+export HOMEBREW_BUNDLE_CASK_SKIP="gcloud-cli${existing_cask_skip:+ ${existing_cask_skip}}"
+printf '%s\n' \
+  'WARN: Homebrew のサンドボックス regression のため gcloud-cli の導入を飛ばす。' \
+  '      他の Brewfile 項目と後続の chezmoi スクリプトは続行する。' \
+  '      gcloud-cli は docs/runbooks/gcloud-cli-homebrew-sandbox.md の手順で別途導入すること。' >&2
+
 brew bundle --global
