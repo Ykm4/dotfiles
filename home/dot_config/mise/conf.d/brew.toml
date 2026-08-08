@@ -2,47 +2,117 @@
 # Homebrew Tasks
 # ============================================================
 
-[tasks."brew:upgrade"]
-description = "Homebrew 本体と formula/cask を更新する（掃除は brew:cleanup）"
+# 内部タスク。破損検査を伴わないので単体では使わない。入口は brew:upgrade。
+# 他タスクから順序制約を張るときも、合成タスクの brew:upgrade ではなくこちらを指すこと。
+# 合成タスクを指すと tools:updaters → brew:upgrade → brew:cask:check → tools:updaters の循環になる。
+[tasks."brew:upgrade:run"]
+hide = true
 # auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
 # Homebrew 6.0 から引数なしの brew upgrade が auto_updates cask も対象にするようになったので、明示的に無効化する。
 # 無効化しないと visual-studio-code の uninstall launchctl から sudo が走る。
 # mise はタスクを独立プロセスグループで起動するため、sudo の /dev/tty 読み取りが SIGTTIN になってタスクが停止する。
+#
+# cask を名指しして更新しないこと。名指しされた cask は Homebrew が「未インストール」と判定した時点で
+# 例外になり（cask/upgrade.rb の CaskNotInstalledError）、tools:update の後続タスクがまるごと止まる。
+# 引数なしなら壊れた cask は列挙から外れるだけで済む。外れた分は brew:cask:check が検出する。
+# gcloud CLI の更新は Google 公式の案内どおり gcloud:upgrade（gcloud components update）が担う。
 env = { HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS = "1" }
 run = [
     "brew update",
     "brew upgrade",
-    # gcloud-cli は auto_updates 宣言があるが、実体は gcloud components update が必要で自動では上がらない。
-    # Google 公式が Homebrew でのインストールを案内しているため brew 管理を維持し、ここで明示的に更新する。
-    # sudo を呼ばないので mise タスク内でも停止しない（visual-studio-code は sudo を呼ぶため列挙しない）。
-    "brew upgrade --cask --greedy gcloud-cli",
 ]
+
+# 単体実行の入口。更新と破損検査の合成なので、brew:upgrade だけを叩いても検査を必ず通る。
+[tasks."brew:upgrade"]
+description = "Homebrew 本体と formula/cask を更新し、Caskroom の破損を検査する（掃除は brew:cleanup）"
+depends = ["brew:upgrade:run", "brew:cask:check"]
+
+[tasks."brew:cask:check"]
+description = "Caskroom のメタデータ破損を検査する"
+# 破損した cask は Homebrew の依存グラフから消えるため、brew autoremove がその cask だけが使う formula を
+# 不要と誤認しうる。掃除の前に検査し、破損があれば掃除へ進まない。
+# チェック名は Homebrew が所有する。未定義の名前を渡すと brew doctor は ofail で exit 1 になり、
+# 本当の破損と終了コードで区別できない。そのため一覧で存在を確かめてから検査する。
+# wait_for: tools:update では全更新タスクの完了後に検査する。brew:update 単体では tools:updaters が
+# DAG に存在しないので空振りし、brew:upgrade:run の直後に走る。
+wait_for = ["brew:upgrade:run", "tools:updaters"]
+run = '''
+if ! checks="$(brew doctor --list-checks)"; then
+  echo "ERROR: brew doctor --list-checks が失敗した。Homebrew 自体の状態を確認すること。" >&2
+  exit 1
+fi
+
+check=check_cask_corrupt_dirs
+if ! printf '%s\n' "$checks" | grep -qxF "$check"; then
+  # 改名に追随する。Caskroom の破損を見るチェックは現状これ1つで、名前に corrupt を含む。
+  check="$(printf '%s\n' "$checks" | grep -E '^check_.*corrupt' | head -n 1)"
+fi
+
+if [ -z "$check" ]; then
+  echo "WARN: brew doctor に Caskroom の破損を見るチェックが無い。" >&2
+  echo "Homebrew 側で削除された可能性がある。検査を飛ばして掃除へ進む。" >&2
+  echo "conf.d/brew.toml のチェック名を見直すこと。" >&2
+  exit 0
+fi
+
+if ! brew doctor "$check"; then
+  echo "ERROR: Caskroom のメタデータ検査（$check）に失敗した。" >&2
+  echo "更新タスクは完了している。brew autoremove と brew cleanup だけを実行していない。" >&2
+  echo "上に出た brew reinstall --cask --force を確認してから手で実行すること。" >&2
+  exit 1
+fi
+'''
 
 [tasks."brew:cleanup"]
 description = "不要になった formula を削除し、古いバージョンとキャッシュを消す"
 # autoremove は依存として入ったが不要になった formula を削除する。
 # cleanup はその formula の古いバージョンとキャッシュを消すため、必ず autoremove の後に実行する。
 # この2つは並列化してはいけない。順序を崩すと削除済み formula のキャッシュが残る。
-# wait_for: tools:update では全更新タスク（tools:updaters）が終わってから掃除する。
-# brew:upgrade も明示するのは、brew:update（tools:updaters を含まない）単体実行時の順序を保つため。
-wait_for = ["brew:upgrade", "tools:updaters"]
+# depends: 破損検査を通ってから掃除する。実行順序の制約は brew:cask:check 側の wait_for に集約している。
+#
+# 先頭の brew doctor は depends と二重の門にするためのもので、消さないこと。
+# depends は mise の既定 fail-fast が前提であり、mise run -c を付けると brew:cask:check が失敗しても
+# 本タスクが起動する。run 配列は -c でも最初の失敗で打ち切られるので、ここで検査すれば
+# brew autoremove の手前で確実に止まる。単一チェックはネットワーク不要で実測 0.3 秒。
+# チェック名を直書きしているので、brew:cask:check 側を変えるときは必ずここも揃えること。
+depends = ["brew:cask:check"]
 run = [
+    "brew doctor --quiet check_cask_corrupt_dirs",
     "brew autoremove",
     "brew cleanup",
 ]
 
-# 単体実行用のまとめタスク。brew:cleanup の wait_for により順序が保たれる。
+# 単体実行用のまとめタスク。brew:cleanup の depends により、検査を挟んだ順序が保たれる。
 [tasks."brew:update"]
-description = "Homebrew パッケージを更新し、掃除する"
+description = "Homebrew パッケージを更新し、破損検査のうえ掃除する"
 depends = ["brew:upgrade", "brew:cleanup"]
 
 [tasks."brewfile:audit"]
-description = "Brewfile と実機の乖離を確認（cleanup dry-run + check。変更は加えない）"
+description = "Brewfile と実機の乖離を確認（削除候補・未充足・pin 済みの列挙。--force を付けないので削除はしない）"
 # XDG_CONFIG_HOME があると --global の参照先が ~/.config/homebrew/Brewfile に変わるため、明示的に固定する。
 env = { HOMEBREW_BUNDLE_FILE_GLOBAL = "{{env.HOME}}/.Brewfile" }
 run = '''
 echo "== 未宣言でインストール済み（削除候補） =="
-brew bundle cleanup --global || true
-echo "== 宣言済みで未インストール =="
-brew bundle check --global --verbose || true
+# brew bundle cleanup に dry-run は無い。--force 無しでも ask が立ち
+# （bundle/subcommand/cleanup.rb の ask: context.ask || !context.force）、stdin と stdout が
+# 両方 TTY なら確認プロンプトが出る。y を押すと未宣言 formula/cask の実削除と
+# Homebrew グローバル trust store の全置換まで走る。HOMEBREW_NO_ASK では抑止できない。
+# mise は端末から実行するとタスクへ TTY を素通しするため、/dev/null で TTY 判定を必ず偽にする。
+# 終了コード 1 は「削除候補あり」を意味する正常系なので、それ以外だけをエラーとして扱う。
+status=0
+brew bundle cleanup --global < /dev/null || status=$?
+if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+  echo "ERROR: brew bundle cleanup が異常終了した（exit $status）。" >&2
+  exit "$status"
+fi
+
+echo "== 宣言済みで未充足（未インストール・service 未起動） =="
+# --no-upgrade: 付けないと「更新可能なだけの cask」まで未充足として並び、本当の未インストールが埋もれる。
+# メタデータ破損の検出はこのタスクではなく brew:cask:check が担う。
+brew bundle check --global --verbose --no-upgrade || true
+
+echo "== pin 済み（brew upgrade / brew bundle の対象外。解除条件は conf.d/gcloud.toml のコメント参照） =="
+# pin 済みは brew upgrade でも brew bundle でも対象外になり、上の2つには絶対に現れない。
+# --formula と --cask を指定しないと両方を走査するので、1コマンドで足りる。
+brew list --pinned --versions || true
 '''

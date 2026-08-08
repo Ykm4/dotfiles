@@ -1,0 +1,69 @@
+# ============================================================
+# Google Cloud CLI Tasks
+# ============================================================
+#
+# 認証まわりは ~/.config/mise/tasks/google/ のファイルタスク（google:auth / google:status /
+# google:gcloud）が担う。こちらは Google Cloud CLI 自体の更新と状態表示に限る。
+#
+# --- gcloud-cli の pin について ---
+# 状態: brew pin --cask gcloud-cli で 579.0.0 に固定している。
+# 理由: Homebrew の f8fcbd88e0（2026-08-07）が cask の preflight_steps と postflight_steps を
+#       サンドボックス実行に変えた。サンドボックスは HOME を一時ディレクトリへ差し替え、
+#       deny_read_home と deny_all_network を課す。gcloud-cli の postflight にある
+#       gcloud config virtualenv の delete / create / enable は pip の外部取得を伴うため必ず失敗し、
+#       cask/installer.rb のロールバックが Caskroom のバージョンディレクトリ・メタデータ・
+#       binary シンボリックリンクを巻き戻す。2026-08-09 に実際に発生した。
+# 解除条件: 上流 cask の postflight_steps から config virtualenv の delete / create / enable が消えること。
+#           確認は brew info --cask gcloud-cli --json=v2 | grep -c '"virtualenv"' を使う。
+#           3 なら据え置き、0 になったら brew unpin --cask gcloud-cli してよい。
+#           バージョンが上がっただけでは解除条件を満たさない。版上げは version と sha256 しか変えない。
+#           brew cat --cask gcloud-cli は API モードでは使えないので判断に使わない。
+# 可視化: pin は brew upgrade でも brew bundle でも沈黙する。
+#         mise r brewfile:audit の「pin 済み」欄でのみ確認できる。
+
+[tasks."gcloud:upgrade"]
+description = "Google Cloud CLI のコンポーネントを更新する（未導入ならスキップ）"
+# Google 公式は「導入とアンインストールは Homebrew、更新は gcloud components update」と案内している。
+# cask は auto_updates true なので brew:upgrade:run の対象外であり、更新はこのタスクが担う。
+#
+# /opt/homebrew/bin/gcloud ではなく share 配下を優先して呼ぶ。cask の preflight_steps が SDK 本体を
+# share へ複製し、Caskroom 側には share を指す逆向きのシンボリックリンクを張る。ロールバックが消すのは
+# Caskroom とメタデータだけで share 側の本体は残るため、binary のリンクが失われても更新を完走できる。
+#
+# 実体が無ければスキップする。gcloud-cli の導入は brew bundle install --global の責務である。
+# ここで失敗させると mise が tools:update の DAG を打ち切り、掃除フェーズが走らないうえ、
+# 並走中の mise:upgrade まで途中で kill される。$(brew --prefix) は代入の中でも set -e で落ちるため
+# フォールバックを置く。
+#
+# 更新そのものの失敗は握り潰さない。他の更新タスクもネットワーク依存で同じ権限を持つのに
+# gcloud だけ非対称にすると、恒久的に壊れた gcloud が無言で更新されなくなる。
+# 更新失敗で掃除まで止めたくないときは mise run -c tools:update を使う（brew:cleanup に二重の門がある）。
+#
+# CLOUDSDK_PYTHON は設定しない。gcloud のランチャーはこの変数が未設定のときにだけ virtualenv を扱う。
+wait_for = ["brew:upgrade:run"]
+run = '''
+brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+gcloud_cli="$brew_prefix/share/google-cloud-sdk/bin/gcloud"
+[ -x "$gcloud_cli" ] || gcloud_cli="$(command -v gcloud || true)"
+if [ -z "$gcloud_cli" ] || [ ! -x "$gcloud_cli" ]; then
+  echo "SKIP: gcloud CLI が見つからないため更新しない。" >&2
+  echo "gcloud-cli の導入は brew bundle install --global が担う。" >&2
+  exit 0
+fi
+"$gcloud_cli" components update --quiet
+'''
+
+[tasks."gcloud:check"]
+description = "Google Cloud CLI の全コンポーネントの導入・更新状況を表示する（変更は加えない）"
+# 所在の解決は gcloud:upgrade とそろえる。片方だけガードすると、更新はスキップされたのに
+# 表示だけ落ちるという食い違いが出る。
+run = '''
+brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+gcloud_cli="$brew_prefix/share/google-cloud-sdk/bin/gcloud"
+[ -x "$gcloud_cli" ] || gcloud_cli="$(command -v gcloud || true)"
+if [ -z "$gcloud_cli" ] || [ ! -x "$gcloud_cli" ]; then
+  echo "SKIP: gcloud CLI が見つからない。brew bundle install --global で導入する。" >&2
+  exit 0
+fi
+"$gcloud_cli" components list
+'''

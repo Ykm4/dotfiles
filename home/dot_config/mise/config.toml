@@ -76,7 +76,9 @@ usql = "latest"
 description = "[tools] に宣言した全ツールを更新する"
 # wait_for: mise 本体が brew formula のため、brew:upgrade が /opt/homebrew/bin/mise を貼り替え終えてから実行する。
 # 同時に走らせると unlink と link の間に mise が PATH から消える窓ができ、後続タスクが command not found になりうる。
-wait_for = ["brew:upgrade"]
+# 合成タスクの brew:upgrade ではなく brew:upgrade:run を指すこと。合成側は brew:cask:check を depends に
+# 持つため、そちらを指すと tools:updaters を経由した循環になる。
+wait_for = ["brew:upgrade:run"]
 run = "mise upgrade"
 
 [tasks."mise:check"]
@@ -97,8 +99,9 @@ run = "mise prune --yes"
 description = "全更新タスクを集約する（tools:update 用）"
 hide = true
 depends = [
-    "brew:upgrade",
+    "brew:upgrade:run",
     "mise:upgrade",
+    "gcloud:upgrade",
     "textlint:update",
     "agent-skills:update",
     "gh-ext:upgrade",
@@ -106,10 +109,10 @@ depends = [
 
 # wait_for により 4 フェーズで進む。各段の中だけが並列になるので、
 # ターミナル上で「いま何をしているか」が読み取りやすい。
-#   [1] brew:upgrade                          … Homebrew 本体と formula / cask の更新
-#   [2] mise:upgrade + gh-ext:upgrade         … [tools] と gh 拡張の更新（いずれも brew の貼り替え完了後）
-#   [3] textlint:update + agent-skills:update … mise 管理のツールを使う更新
-#   [4] mise:prune + brew:cleanup             … 参照されなくなった版とキャッシュの掃除（tools:updaters 完了後）
+#   [1] brew:upgrade:run                               … Homebrew 本体と formula / cask の更新
+#   [2] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
+#   [3] textlint:update + agent-skills:update          … mise 管理のツールを使う更新
+#   [4] mise:prune + brew:cask:check → brew:cleanup    … 掃除（Homebrew 側は Caskroom の破損検査を通ってから）
 [tasks."tools:update"]
 description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（4 フェーズ DAG）"
 depends = [
