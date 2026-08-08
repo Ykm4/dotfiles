@@ -79,17 +79,20 @@ printf '%s  %s\n' "$SSHA" gcloud-cli.upstream.rb | shasum -a 256 -c -
 
 ### [2] postflight の virtualenv 操作を削除する
 
-まず既存の patch が当たるか試す。当たらなければ上流が変わっているので、手で削除して差分を作り直す。
+まず既存の patch が当たるか試し、当たれば適用する。当たらなければ上流が変わっているので、手で削除して
+差分を作り直す。`--dry-run` だけで次の手順へ進むと、未改変のまま入れ直して同じ失敗を繰り返す。
 
 ```bash
 mkdir -p Casks/g && cp gcloud-cli.upstream.rb Casks/g/gcloud-cli.rb
-patch -p1 --dry-run < ~/other/dotfiles/docs/patches/gcloud-cli-579-no-virtualenv.patch
+patch_file=~/other/dotfiles/docs/patches/gcloud-cli-579-no-virtualenv.patch
+patch -p1 --dry-run < "$patch_file"   # 当たるか確かめる
+patch -p1 < "$patch_file"             # 実際に当てる
 ```
 
 削除するのは `postflight_steps` の中の `on_macos` ブロックだけである。その中にある
 `gcloud config virtualenv` の delete・create・enable と `gcloud version` を消す。
-`unless_path_exists "{{caskroom_path}}/latest"` の symlink 作成は必ず残す。既存のシェルプロファイルが
-`latest` を参照するために cask 自身が張っているものである。
+`unless_path_exists "{{caskroom_path}}/latest"` の symlink 作成は必ず残す。今回の原因とは無関係な、
+上流 cask 側の管理処理である。
 
 ファイル名は `gcloud-cli.rb` にする。Homebrew はファイル名から token を決める。
 
@@ -116,11 +119,11 @@ cask が実行できなかった後処理をここで補う。
 ### [5] 確認する
 
 ```bash
-brew list --cask --versions gcloud-cli      # 579.0.0 が返る
+brew list --cask --versions gcloud-cli      # 手順1で取得した version が返る
 brew doctor check_cask_corrupt_dirs         # "Your system is ready to brew."
 command -v gcloud                           # /opt/homebrew/bin/gcloud
 gcloud --version
-gcloud config configurations list           # 設定済みのプロファイルが揃う
+gcloud config configurations list           # 既存機の復旧時のみ。設定済みのプロファイルが揃う
 ```
 
 ### [6] pin する
