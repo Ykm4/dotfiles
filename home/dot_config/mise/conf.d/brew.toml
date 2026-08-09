@@ -33,6 +33,9 @@ description = "Caskroom のメタデータ破損を検査する"
 # 不要と誤認しうる。掃除の前に検査し、破損があれば掃除へ進まない。
 # チェック名は Homebrew が所有する。未定義の名前を渡すと brew doctor は ofail で exit 1 になり、
 # 本当の破損と終了コードで区別できない。そのため一覧で存在を確かめてから検査する。
+# 名前の定義元は config.toml の [vars] の cask_check ただ1つで、brew:cleanup の門も同じ値を使う。
+# 推測で別名へ追随しない。追随すると、こちらは新名で成功するのに brew:cleanup の門は旧名で落ちる、
+# という入口ごとの食い違いが生まれる。改名されたら人が [vars] を直す。
 # wait_for: tools:update では全更新タスクの完了後に検査する。brew:update 単体では tools:updaters が
 # DAG に存在しないので空振りし、brew:upgrade:run の直後に走る。
 wait_for = ["brew:upgrade:run", "tools:updaters"]
@@ -42,25 +45,21 @@ if ! checks="$(brew doctor --list-checks)"; then
   exit 1
 fi
 
-check=check_cask_corrupt_dirs
+check="{{vars.cask_check}}"
 if ! printf '%s\n' "$checks" | grep -qxF "$check"; then
-  # 改名に追随する。cask と corrupt の両方を名前に含むものだけを候補にし、一意に決まらなければ止める。
-  # ここを fail-open にすると brew:upgrade 単体は無検査で成功扱いになる一方、brew:cleanup の
-  # 二重の門は旧名を直書きしているので失敗する。入口ごとに結果が食い違うため fail-closed にする。
-  matches="$(printf '%s\n' "$checks" | grep -E '^check_.*(cask.*corrupt|corrupt.*cask)' || true)"
-  count="$(printf '%s\n' "$matches" | grep -c . || true)"
-  if [ "$count" -ne 1 ]; then
-    echo "ERROR: brew doctor の Caskroom 破損チェックを一意に特定できない（候補 $count 件）。" >&2
-    echo "Homebrew 側で改名または削除された可能性がある。conf.d/brew.toml のチェック名を見直すこと。" >&2
-    echo "brew:cleanup も同じ名前を直書きしているので、必ず両方そろえること。" >&2
-    exit 1
-  fi
-  check="$matches"
-  echo "WARN: check_cask_corrupt_dirs が無いため $check を使った。設定の見直しが要る。" >&2
+  echo "ERROR: brew doctor に ${check} が無い。Homebrew 側で改名または削除された可能性がある。" >&2
+  echo "cask 関連の候補: $(printf '%s\n' "$checks" | grep -i cask | tr '\n' ' ')" >&2
+  echo "config.toml の [vars] の cask_check を直すこと。brew:cleanup の門も同じ値を使う。" >&2
+  exit 1
 fi
 
 if ! brew doctor "$check"; then
-  echo "ERROR: Caskroom のメタデータ検査（$check）に失敗した。" >&2
+  # 日本語メッセージ内の変数参照は必ず ${name} と波括弧で囲むこと。macOS の UTF-8 ロケールでは
+  # isalnum(0xEF) が真になり、bash は版を問わず（5.3 でも）全角文字の先頭バイトを変数名に取り込む。
+  # 波括弧を省いて全角括弧の直前に置くと、変数名が check\xEF と解釈されて空展開になり、
+  # 残った不正バイトで mise が stderr の読み取りを打ち切る。
+  # tools:update 経路では案内が1行も届かなくなる。
+  echo "ERROR: Caskroom のメタデータ検査（${check}）に失敗した。" >&2
   echo "tools:update からの実行なら更新タスクは完了している。" >&2
   echo "brew autoremove と brew cleanup だけを実行していない。" >&2
   echo "上に出た brew reinstall --cask --force を確認してから手で実行すること。" >&2
@@ -79,10 +78,14 @@ description = "不要になった formula を削除し、古いバージョン�
 # depends は mise の既定 fail-fast が前提であり、mise run -c を付けると brew:cask:check が失敗しても
 # 本タスクが起動する。run 配列は -c でも最初の失敗で打ち切られるので、ここで検査すれば
 # brew autoremove の手前で確実に止まる。単一チェックはネットワーク不要で実測 0.3 秒。
-# チェック名を直書きしているので、brew:cask:check 側を変えるときは必ずここも揃えること。
+# チェック名は brew:cask:check と同じく config.toml の [vars] の cask_check を参照する。
+# ただし --list-checks 自体が失敗する経路までは塞げない。その場合 brew:cask:check は終了コード 1、
+# こちらの門は名指しチェックが通れば素通りするので、mise run -c を付けたときだけ食い違う。
+# 実体の破損は検出できている状態なので実害は小さいが、この門は「同じ破損条件については確実に止める」
+# ものであって、あらゆる失敗を止めるものではない。
 depends = ["brew:cask:check"]
 run = [
-    "brew doctor --quiet check_cask_corrupt_dirs",
+    "brew doctor --quiet {{vars.cask_check}}",
     "brew autoremove",
     "brew cleanup",
 ]
@@ -97,6 +100,22 @@ description = "Brewfile と実機の乖離を確認（stdin を /dev/null に固
 # XDG_CONFIG_HOME があると --global の参照先が ~/.config/homebrew/Brewfile に変わるため、明示的に固定する。
 env = { HOMEBREW_BUNDLE_FILE_GLOBAL = "{{env.HOME}}/.Brewfile" }
 run = '''
+# 先に Brewfile を読めるか、解釈できるかを確かめる。
+# brew bundle cleanup も check も、Brewfile 不在や構文エラーで終了コード 1 を返す。
+# 下では 1 を「削除候補あり」の正常系として受理するので、この門が無いと Brewfile を
+# 1 バイトも読まないまま監査が「乖離なし」に見えてしまう。
+# brew bundle list は宣言を列挙するだけで実機に触れない。
+brewfile="${HOMEBREW_BUNDLE_FILE_GLOBAL:?HOMEBREW_BUNDLE_FILE_GLOBAL が未設定}"
+if [ ! -r "${brewfile}" ]; then
+  echo "ERROR: Brewfile を読めない（${brewfile}）。" >&2
+  exit 1
+fi
+if ! parse_err="$(brew bundle list --global 2>&1 >/dev/null)"; then
+  echo "ERROR: Brewfile を解釈できない（${brewfile}）。" >&2
+  printf '%s\n' "${parse_err}" >&2
+  exit 1
+fi
+
 echo "== 未宣言でインストール済み（削除候補） =="
 # brew bundle cleanup に dry-run は無い。--force 無しでも ask が立ち
 # （bundle/subcommand/cleanup.rb の ask: context.ask || !context.force）、stdin と stdout が
@@ -107,7 +126,8 @@ echo "== 未宣言でインストール済み（削除候補） =="
 status=0
 brew bundle cleanup --global < /dev/null || status=$?
 if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
-  echo "ERROR: brew bundle cleanup が異常終了した（exit $status）。" >&2
+  # 波括弧が必要な理由は brew:cask:check のコメントを参照。
+  echo "ERROR: brew bundle cleanup が異常終了した（exit ${status}）。" >&2
   exit "$status"
 fi
 
@@ -116,7 +136,7 @@ echo "== 宣言済みで未充足（未インストール・service 未起動）
 # メタデータ破損の検出はこのタスクではなく brew:cask:check が担う。
 brew bundle check --global --verbose --no-upgrade || true
 
-echo "== pin 済み（brew upgrade / brew bundle の対象外。解除条件は conf.d/gcloud.toml のコメント参照） =="
+echo "== pin 済み（brew upgrade / brew bundle の対象外） =="
 # pin 済みは brew upgrade でも brew bundle でも対象外になり、上の2つには絶対に現れない。
 # --formula と --cask を指定しないと両方を走査するので、1コマンドで足りる。
 # pin が1つも無くても正常終了するため握り潰さない。異常終了は監査の失敗として扱う。

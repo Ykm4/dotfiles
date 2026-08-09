@@ -12,6 +12,9 @@
 dbx = "{{env.HOME}}/.config/dbx/bin/dbx"
 skillsfile = "{{env.HOME}}/.config/agent-skills/Skillsfile"
 textlint_home = "{{env.HOME}}/.config/textlint"
+# brew doctor の Caskroom 破損チェック名。brew:cask:check と brew:cleanup の唯一の定義元。
+# 名前は Homebrew が所有するので、改名されたらここだけ直す。
+cask_check = "check_cask_corrupt_dirs"
 
 [tools]
 # ============================================================
