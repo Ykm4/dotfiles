@@ -56,6 +56,10 @@ brew "pipx"
 brew "pkgconf"
 # PDF rendering library (based on the xpdf-3.0 code base)
 brew "poppler"
+# Google Cloud CLI の実行に使う Python（gcloud は公式 archive から導入するため cask 依存では入らない）
+# Apple Silicon では SDK 同梱 Python の実体が無く（bundled-python3-unix の manifest は 0 件）、
+# ランチャーは外部 Python を要求する。awscli と pipx も同じ formula を使う。
+brew "python@3.14"
 # Ruby version manager
 brew "rbenv"
 # Search tool like grep and The Silver Searcher
@@ -90,8 +94,6 @@ cask "discord"
 cask "finicky"
 cask "font-jetbrains-mono-nerd-font"
 cask "font-monaspace"
-# Set of tools to manage resources and applications hosted on Google Cloud
-cask "gcloud-cli"
 # Terminal emulator that uses platform-native UI and GPU acceleration
 cask "ghostty"
 # Client-side GUI application for modern database development and operations

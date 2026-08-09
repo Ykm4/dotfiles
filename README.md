@@ -37,6 +37,7 @@ chezmoi apply                                                # [3] 再適用で�
 - lazygit設定（`~/.config/lazygit/config.yml`）— macOSの既定パスは`~/Library/Application Support`のため`.zshenv`の`LG_CONFIG_FILE`でXDGパスを参照させる
 - Codex CLI設定の雛形（`~/.codex/config.toml`）— `create_`方式で初回のみ生成。以後はCodex自身がtrust情報等を追記するため管理外で育てる（取引先パス・取引先MCPは雛形に含めない）
 - gcloudのconfigurationファイル（`hucom-system`・`personal`の2プロファイル。account・projectの値は1Passwordから注入）
+- gcloud SDK本体の導入（`.chezmoiscripts/run_after_90-gcloud-install.sh`）— Google公式archiveから導入する。展開先は`~/.local/share/google-cloud-sdk`。更新は`mise r gcloud:upgrade`が担う。Homebrewのcaskを使わない理由と運用は`docs/runbooks/gcloud-cli-installation.md`にある。
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
 - miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
 - Claude Codeのユーザー設定（`~/.claude`のsettings.json・keybindings・statusline・rules・scripts・公開可能なskills）。settings.jsonの`enabledPlugins`がプラグインの宣言、userスコープMCPは`run_onchange`スクリプトで登録する。
@@ -45,7 +46,7 @@ chezmoi apply                                                # [3] 再適用で�
 
 新マシンでの`chezmoi apply`完了後、次を手動で行う。
 
-- `gh auth login`・プロファイルごとの`gws auth login`・`gcloud auth login`を再実行する。
+- `gh auth login`と、プロファイルごとの`mise run google:auth <profile>`を実行する。gcloudの資格情報は`google:gcloud`が都度渡すため`gcloud auth login`は使わない。
 - `~/.zshrc.local`を旧マシンから手動で移送する（chezmoi管理外のローカル拡張）。
 - 取引先スコープの設定は、1Passwordの取引先用Vaultから`op read`で手動復元する。
 - Claude Codeの非公開設定（`CLAUDE.md`・`settings.json`・一部skills）をprivateリポジトリから復元する。

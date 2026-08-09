@@ -23,13 +23,14 @@ fi
 profile="$1"
 shift
 
-# gcloud の所在を解決する。cask のロールバックで /opt/homebrew/bin/gcloud のシンボリックリンクが
-# 失われても動くよう、share 配下の実体を優先する（conf.d/gcloud.toml と同じ方針）。
-brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
-gcloud_cli="${brew_prefix}/share/google-cloud-sdk/bin/gcloud"
+# gcloud の所在を解決する（conf.d/gcloud.toml と同じ方針）。
+# 実体は Google 公式 archive から ~/.local/share/google-cloud-sdk へ導入する。PATH に頼らないのは、
+# 非対話シェルや PATH が整う前の実行でも動かすためである。
+gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
+gcloud_cli="${gcloud_root}/bin/gcloud"
 [ -x "${gcloud_cli}" ] || gcloud_cli="$(command -v gcloud || true)"
 if [ -z "${gcloud_cli}" ] || [ ! -x "${gcloud_cli}" ]; then
-  printf 'gcloud CLI が見つからない。brew bundle install --global で導入する。\n' >&2
+  printf 'gcloud CLI が見つからない。chezmoi apply で導入する。\n' >&2
   exit 1
 fi
 

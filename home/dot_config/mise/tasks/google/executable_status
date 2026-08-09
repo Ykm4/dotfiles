@@ -22,14 +22,13 @@ for cfg in "${HOME}"/.config/gws/*/; do
 done
 
 printf '\n=== gcloud（configuration の対応）===\n'
-# 所在の解決は google:gcloud と conf.d/gcloud.toml にそろえる。cask のロールバックで
-# /opt/homebrew/bin/gcloud のシンボリックリンクが失われても share 配下の実体は残るため、そちらを優先する。
+# 所在の解決は google:gcloud と conf.d/gcloud.toml にそろえる。
 # 解決に失敗したときは「設定を読めない」ではなく、gcloud 自体が無いことを明示する。
-brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
-gcloud_cli="${brew_prefix}/share/google-cloud-sdk/bin/gcloud"
+gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
+gcloud_cli="${gcloud_root}/bin/gcloud"
 [ -x "${gcloud_cli}" ] || gcloud_cli="$(command -v gcloud || true)"
 if [ -z "${gcloud_cli}" ] || [ ! -x "${gcloud_cli}" ]; then
-  printf '  gcloud CLI が見つからない（brew bundle install --global で導入する）\n'
+  printf '  gcloud CLI が見つからない（chezmoi apply で導入する）\n'
 else
   "${gcloud_cli}" config configurations list \
     --format="table[box](name,is_active,properties.core.account,properties.core.project)" 2>/dev/null \

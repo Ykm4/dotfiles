@@ -61,6 +61,10 @@ autoload -Uz compinit
 compinit
 zinit cdreplay -q
 
+# Google Cloud CLI の補完（compinit の後に読む必要がある）
+# GCLOUD_SDK_ROOT は .zshenv で定義する。SDK 未導入の新マシンでは何もしない。
+[[ -r "${GCLOUD_SDK_ROOT:-}/completion.zsh.inc" ]] && source "${GCLOUD_SDK_ROOT}/completion.zsh.inc"
+
 # ------------------------------------
 # ツール初期化
 # ------------------------------------

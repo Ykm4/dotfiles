@@ -5,58 +5,54 @@
 # 認証まわりは ~/.config/mise/tasks/google/ のファイルタスク（google:auth / google:status /
 # google:gcloud）が担う。こちらは Google Cloud CLI 自体の更新と状態表示に限る。
 #
-# --- gcloud-cli の pin について ---
-# 状態: brew pin --cask gcloud-cli で 579.0.0 に固定している。
-# 理由: Homebrew の f8fcbd88e0（2026-08-07）が cask の preflight_steps と postflight_steps を
-#       サンドボックス実行に変えた。サンドボックスは HOME を一時ディレクトリへ差し替え、
-#       deny_read_home と deny_all_network を課す。gcloud-cli の postflight にある
-#       gcloud config virtualenv の delete / create / enable は pip の外部取得を伴うため必ず失敗し、
-#       cask/installer.rb のロールバックが Caskroom のバージョンディレクトリ・メタデータ・
-#       binary シンボリックリンクを巻き戻す。2026-08-09 に実際に発生した。
-# 解除条件: postflight の HOME 依存・ネットワーク依存の処理がサンドボックスの外へ移るか消えること。
-#           あるいは Homebrew 本体側でその処理を許可する修正が入ること。どちらか一方で足りる。
-#           バージョンが上がっただけでは解除条件を満たさない。版上げは version と sha256 しか変えない。
-#           確認は件数ではなく structured run の中身を目視する。件数では、本体側の修正で安全になった場合や、
-#           別名のネットワーク依存コマンドへ置き換わった場合を取り違える。
-#           grep -c は 0 件でも終了コード 1 を返すので判定に使わない。
-#             brew info --json=v2 --cask gcloud-cli \
-#               | jq '[.casks[0].artifacts[]? | .postflight_steps? // empty | .[].steps[]?
-#                      | select(.type == "run") | {command, args, env, guards}]'
-#           brew cat --cask gcloud-cli は API モードでは使えないので判断に使わない。
-#           手順の全体は dotfiles の docs/runbooks/gcloud-cli-homebrew-sandbox.md にある。
-# 可視化: pin は brew upgrade でも brew bundle でも沈黙する。
-#         mise r brewfile:audit の「pin 済み」欄でのみ確認できる。
+# 実体は Homebrew ではなく Google 公式の versioned archive から導入する。
+# 導入は .chezmoiscripts/run_after_90-gcloud-install.sh、所在は .zshenv の GCLOUD_SDK_ROOT。
+# Homebrew の cask を使わない理由は同スクリプトのコメントに書いてある。
 
 [tasks."gcloud:upgrade"]
 description = "Google Cloud CLI のコンポーネントを更新する（未導入ならスキップ）"
-# Google 公式は「導入とアンインストールは Homebrew、更新は gcloud components update」と案内している。
-# cask は auto_updates true なので brew:upgrade:run の対象外であり、更新はこのタスクが担う。
+# Google 公式は「更新は gcloud components update」と案内している。SDK は自分で自分を更新するので、
+# バージョン管理ツールの下に置かず、component manager に一本化する。
 #
-# /opt/homebrew/bin/gcloud ではなく share 配下を優先して呼ぶ。cask の preflight_steps が SDK 本体を
-# share へ複製し、Caskroom 側には share を指す逆向きのシンボリックリンクを張る。ロールバックが消すのは
-# Caskroom とメタデータだけで share 側の本体は残るため、binary のリンクが失われても更新を完走できる。
-#
-# 実体が無ければスキップする。gcloud-cli の導入は brew bundle install --global の責務である。
+# 実体が無ければスキップする。導入は chezmoi の bootstrap スクリプトの責務である。
 # ここで失敗させると mise が tools:update の DAG を打ち切り、掃除フェーズが走らないうえ、
-# 並走中の mise:upgrade まで途中で kill される。$(brew --prefix) は代入の中でも set -e で落ちるため
-# フォールバックを置く。
+# 並走中の mise:upgrade まで途中で kill される。
 #
 # 更新そのものの失敗は握り潰さない。他の更新タスクもネットワーク依存で同じ権限を持つのに
 # gcloud だけ非対称にすると、恒久的に壊れた gcloud が無言で更新されなくなる。
 # 更新失敗で掃除まで止めたくないときは mise run -c tools:update を使う（brew:cleanup に二重の門がある）。
 #
-# CLOUDSDK_PYTHON は設定しない。gcloud のランチャーはこの変数が未設定のときにだけ virtualenv を扱う。
+# wait_for に brew:upgrade:run を置くのは、SDK が使う python@3.14 が Homebrew 管理だからである。
+# Apple Silicon では SDK 同梱 Python の実体が無く、外部 Python が要る。
+#
+# CLOUDSDK_PYTHON はこのタスクの中だけで設定する。日常の実行では設定しない。
+# 設定しないと、components が実際に更新されたあとに走る InstallPythonAndDependenciesOnMac が
+# python_manager.py の _GcloudRequiredPythonToUse で None を返し、_MacInstallPython へ落ちる。
+# そこは xcode-select --install と sudo installer を実行するため、mise タスク配下では
+# sudo が SIGTTIN で無言停止しうる。判定は「設置パスに homebrew を含むか」なので、
+# 公式 archive へ移した時点で Homebrew 経路は選ばれなくなった。
+# 設定してあれば sudo を回避したうえで UpdatePythonDependencies が virtualenv を作り直す。
+# 日常の実行で設定しないのは、ランチャーがこの変数の未設定時にだけ
+# ~/.config/gcloud/virtenv を有効化し、native の crcmod・grpcio を使うためである。
+# python@3.14 は Brewfile・run_after_90-gcloud-install.sh・ここの3か所に書かれる。上げるときは同時に直す。
 wait_for = ["brew:upgrade:run"]
 run = '''
-brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
-gcloud_cli="$brew_prefix/share/google-cloud-sdk/bin/gcloud"
+gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
+gcloud_cli="$gcloud_root/bin/gcloud"
 [ -x "$gcloud_cli" ] || gcloud_cli="$(command -v gcloud || true)"
 if [ -z "$gcloud_cli" ] || [ ! -x "$gcloud_cli" ]; then
   echo "SKIP: gcloud CLI が見つからないため更新しない。" >&2
-  echo "gcloud-cli の導入は brew bundle install --global が担う。" >&2
+  echo "  導入は chezmoi apply（run_after_90-gcloud-install.sh）が行う。" >&2
   exit 0
 fi
-"$gcloud_cli" components update --quiet
+brew_python=/opt/homebrew/opt/python@3.14/bin/python3.14
+if [ -x "${brew_python}" ]; then
+  CLOUDSDK_PYTHON="${brew_python}" "$gcloud_cli" components update --quiet
+else
+  echo "WARN: ${brew_python} が無い。CLOUDSDK_PYTHON を固定せず更新する。" >&2
+  echo "  components が更新されると sudo による Python 導入が走りうる。" >&2
+  "$gcloud_cli" components update --quiet
+fi
 '''
 
 [tasks."gcloud:check"]
@@ -64,11 +60,11 @@ description = "Google Cloud CLI の全コンポーネントの導入・更新状
 # 所在の解決は gcloud:upgrade とそろえる。片方だけガードすると、更新はスキップされたのに
 # 表示だけ落ちるという食い違いが出る。
 run = '''
-brew_prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
-gcloud_cli="$brew_prefix/share/google-cloud-sdk/bin/gcloud"
+gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
+gcloud_cli="$gcloud_root/bin/gcloud"
 [ -x "$gcloud_cli" ] || gcloud_cli="$(command -v gcloud || true)"
 if [ -z "$gcloud_cli" ] || [ ! -x "$gcloud_cli" ]; then
-  echo "SKIP: gcloud CLI が見つからない。brew bundle install --global で導入する。" >&2
+  echo "SKIP: gcloud CLI が見つからない。chezmoi apply で導入する。" >&2
   exit 0
 fi
 "$gcloud_cli" components list

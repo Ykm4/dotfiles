@@ -20,6 +20,18 @@ case ":$PATH:" in
   *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
+# Google Cloud CLI は公式 archive から導入する（Homebrew の cask は使わない）
+# 実体は .chezmoiscripts/run_after_90-gcloud-install.sh が展開する。更新は gcloud components update が担う。
+# .zshenv に置く理由と重複ガードの理由は上の ~/.local/bin と同じ。補完は .zshrc の compinit 後で読む。
+# ここでの prepend は「PATH から解決できること」しか保証しない。ログインシェルでは、この後に走る
+# /etc/zprofile の path_helper が /etc/paths の中身を全部先頭へ移すため、実際の順位は後ろへ下がる。
+# /opt/homebrew/bin に gcloud 系のコマンドが無い前提で成り立っている。cask を戻すと無言で先を越される。
+export GCLOUD_SDK_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk"
+case ":$PATH:" in
+  *":$GCLOUD_SDK_ROOT/bin:"*) ;;
+  *) export PATH="$GCLOUD_SDK_ROOT/bin:$PATH" ;;
+esac
+
 # brew bundle --global の対象を ~/.Brewfile に固定（Homebrew 6 は ~/.homebrew/Brewfile を優先するため）
 # （.chezmoiscripts/run_onchange_after_10-brew-bundle.sh.tmpl 内の同名 export と同期を保つ）
 export HOMEBREW_BUNDLE_FILE_GLOBAL="$HOME/.Brewfile"
