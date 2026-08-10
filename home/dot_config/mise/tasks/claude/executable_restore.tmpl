@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#MISE description="Claude Code の MCP をプロファイルごとに宣言どおり揃える（存在保証のみ）"
+# 宣言は chezmoi の .chezmoidata/claude-profiles.toml。このファイルはそこから生成される。
+# 契約: 必要項目の存在を保証する。名前が一致すれば URL・ヘッダの差異は検出しない。
+# 満たせない項目は詳細を表示して非0で終わる。
+set -euo pipefail
+
+[ $# -eq 0 ] || { echo "未知の引数: $*" >&2; exit 2; }
+
+command -v claude >/dev/null || { echo "claude CLI が無い" >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq が無い" >&2; exit 1; }
+
+rc=0
+
+# personal は CLAUDE_CONFIG_DIR を設定しない。設定すると .claude.json が二重になる。
+run_claude() {
+  local explicit="$1" dir="$2"; shift 2
+  if [ "$explicit" = "yes" ]; then
+    CLAUDE_CONFIG_DIR="$dir" claude "$@"
+  else
+    env -u CLAUDE_CONFIG_DIR claude "$@"
+  fi
+}
+
+{{ range .claudeProfiles }}
+{{- $p := . }}
+{{- $explicit := "no" }}{{ if $p.explicitEnv }}{{ $explicit = "yes" }}{{ end }}
+echo "=== {{ $p.name }} ==="
+NAME="{{ $p.name }}"; DIR="$HOME/{{ $p.configDir }}"; EXPLICIT="{{ $explicit }}"
+if [ ! -d "$DIR" ]; then
+  echo "  設定ディレクトリが無い: $DIR" >&2; rc=1
+else
+{{- range $p.mcp }}
+  MCP_URL="{{ if hasKey . "urlEnv" }}${{ "{" }}{{ .urlEnv }}:-{{ "}" }}{{ else }}{{ .url }}{{ end }}"
+  if [ -z "$MCP_URL" ]; then
+    echo "  mcp skipped（URL の環境変数が未設定）: {{ .name }}" >&2; rc=1
+  elif run_claude "$EXPLICIT" "$DIR" mcp get "{{ .name }}" >/dev/null 2>&1; then
+    echo "  mcp ok: {{ .name }}"
+  else
+    run_claude "$EXPLICIT" "$DIR" mcp add --scope user --transport {{ .transport }} "{{ .name }}" "$MCP_URL" \
+      {{ if hasKey . "header" }}--header '{{ .header }}'{{ end }} \
+      && echo "  mcp added: {{ .name }}" \
+      || { echo "  mcp failed: {{ .name }}" >&2; rc=1; }
+  fi
+{{- end }}
+fi
+{{ end }}
+
+if [ "$rc" -ne 0 ]; then
+  echo "未完了または不一致の項目がある。認証後に mise run claude:restore を再実行すること" >&2
+fi
+exit "$rc"
