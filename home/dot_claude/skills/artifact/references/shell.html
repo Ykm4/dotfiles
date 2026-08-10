@@ -1,0 +1,360 @@
+<title>{{TAB_TITLE}}</title>
+
+<style>
+  /* 配色と書体は ~/.claude/rules/design-system.md に対応する。色を変えるときはライトとダーク両方のブロックを直し、:root を再宣言しない。 */
+
+  :root {
+    color-scheme: light dark;
+
+    --ink:        #1c2b2d;
+    --ink-soft:   #52625f;
+    --ink-faint:  #636f6b;
+    --paper:      #fbfaf6;
+    --paper-sunk: #f2f1ea;
+    --rule:       #d8ded4;
+    --accent:     #2f6f4e;
+    --accent-bg:  #e8f0e8;
+    --alert:      #a63a2b;
+    --alert-bg:   #f7e9e5;
+
+    /* 自動注入される Chart.js グルーコードが読む名前 */
+    --ink-muted: var(--ink-faint);
+    --line:      var(--rule);
+    --good:      var(--accent);
+
+    --font-display: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", "Times New Roman", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, "Noto Sans JP", system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Hiragino Sans", monospace;
+
+    --step-0: 1rem;
+    --step-1: 1.15rem;
+    --step-2: 1.45rem;
+    --step-3: 1.9rem;
+    --step-4: 2.6rem;
+
+    --measure: 34rem;
+  }
+
+  h1, h2, h3, p, ul, ol, pre, figure, blockquote, table { margin: 0; }
+
+  /* OS がダーク。ただし閲覧者が明示的にライトへ切り替えたときは当てない */
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --ink: #e6ebe4; --ink-soft: #a3b0ab; --ink-faint: #9aa8a3;
+      --paper: #12171a; --paper-sunk: #1a2124; --rule: #2e393a;
+      --accent: #74bb95; --accent-bg: #1b2c25;
+      --alert: #e0917f; --alert-bg: #2c1e1c;
+    }
+  }
+
+  /* 閲覧者がダークへ切り替えた */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ink: #e6ebe4; --ink-soft: #a3b0ab; --ink-faint: #9aa8a3;
+    --paper: #12171a; --paper-sunk: #1a2124; --rule: #2e393a;
+    --accent: #74bb95; --accent-bg: #1b2c25;
+    --alert: #e0917f; --alert-bg: #2c1e1c;
+  }
+
+  @media print {
+    :root, :root[data-theme="dark"], :root:where(:not([data-theme="light"])) {
+      color-scheme: light;
+      --ink: #1c2b2d; --ink-soft: #52625f; --ink-faint: #636f6b;
+      --paper: #ffffff; --paper-sunk: #f2f1ea; --rule: #d8ded4;
+      --accent: #2f6f4e; --accent-bg: #e8f0e8;
+      --alert: #a63a2b; --alert-bg: #f7e9e5;
+    }
+    .scroller, table, pre.code, .diagram, .verdict, .note { break-inside: avoid; }
+    thead { display: table-header-group; }
+    h2, h3 { break-after: avoid; }
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: var(--step-0);
+    line-height: 1.85;
+    overflow-wrap: anywhere;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 1.5rem;
+  }
+
+  .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: var(--step-4);
+    font-weight: 600;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: var(--step-1);
+    color: var(--ink-soft);
+    max-width: var(--measure);
+    line-height: 1.9;
+  }
+
+  section { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  h2 {
+    font-family: var(--font-display);
+    font-size: var(--step-3);
+    font-weight: 600;
+    line-height: 1.4;
+    text-wrap: balance;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-size: var(--step-2);
+    font-weight: 600;
+    line-height: 1.5;
+    text-wrap: balance;
+  }
+
+  p { max-width: var(--measure); }
+
+  a {
+    color: var(--accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+
+  /* 結論の囲み。見出しは .verdict 直下の strong に限る */
+  .verdict {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 1.4rem 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .verdict > strong {
+    font-family: var(--font-display);
+    font-size: var(--step-2);
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  /* 注意・落とし穴の囲み */
+  .note {
+    border-left: 3px solid var(--alert);
+    background: var(--alert-bg);
+    padding: 1.1rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .note-label, .verdict-label {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--alert);
+  }
+
+  .verdict-label { color: var(--accent); }
+
+  .note p { max-width: none; }
+
+  /* 図。Mermaid は記法だけ書く。色は指定しない（注入ランタイムがテーマに追随して配色する） */
+  .diagram {
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    padding: 1.5rem 1rem;
+    overflow-x: auto;
+  }
+
+  .diagram pre.mermaid { margin: 0; white-space: pre-wrap; }
+
+  /* 表。数値列には class="num" を付ける。列が多い表は <div class="scroller wide"> */
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.92rem;
+  }
+
+  .scroller.wide table { min-width: 34rem; }
+
+  caption {
+    text-align: left;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    padding: 0.7rem 0.9rem;
+    background: var(--paper-sunk);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  th, td {
+    padding: 0.7rem 0.9rem;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    line-height: 1.7;
+  }
+
+  thead th {
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* 縦に揃える列だけ。大きな単独数値には付けない */
+  td.num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  td.name { font-family: var(--font-mono); font-size: 0.85rem; white-space: nowrap; }
+
+  /* 良し悪しは色だけで示さない。記号を伴わせる */
+  .ok { color: var(--accent); font-weight: 600; }
+  .no { color: var(--alert); font-weight: 600; }
+  .ok::before { content: "✓ "; }
+  .no::before { content: "× "; }
+
+  /* 状態のチップ。線種でも区別できるようにする */
+  .chip {
+    display: inline-block;
+    font-size: 0.74rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .chip.on {
+    border-color: var(--accent);
+    border-style: solid;
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .chip.warn {
+    border-color: var(--alert);
+    border-style: dashed;
+    color: var(--alert);
+    background: var(--alert-bg);
+  }
+
+  ul, ol {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-left: 1.3rem;
+    max-width: var(--measure);
+  }
+
+  li::marker { color: var(--ink-faint); }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--paper-sunk);
+    padding: 0.1rem 0.35rem;
+    word-break: break-word;
+  }
+
+  pre.code {
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 1.1rem 1.2rem;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+    line-height: 1.75;
+  }
+
+  pre.code code, pre.code code.hljs { background: none; padding: 0; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  footer a { color: var(--ink-soft); }
+
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  img, svg { max-width: 100%; height: auto; }
+  :target { scroll-margin-top: 2rem; }
+
+  @media (max-width: 34rem) {
+    h1 { font-size: var(--step-3); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  /* 成果物ごとの追加スタイル */
+  /* SLOT: EXTRA_STYLE */
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">{{EYEBROW}}</div>
+    <h1>{{TITLE}}</h1>
+    <p class="standfirst">{{SUMMARY}}</p>
+  </header>
+
+  <!-- SLOT: BODY -->
+
+  <footer>
+    <!-- SLOT: FOOTER -->
+  </footer>
+
+</div>
