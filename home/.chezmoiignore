@@ -1,4 +1,4 @@
 # skills の実行時依存はリポジトリに含めない（新マシンでは bun install で復元）
-.claude/skills/*/node_modules
-.claude/skills/*/node_modules/**
-.claude/skills/*/bun.lock
+.config/claude/_shared/skills/*/node_modules
+.config/claude/_shared/skills/*/node_modules/**
+.config/claude/_shared/skills/*/bun.lock
