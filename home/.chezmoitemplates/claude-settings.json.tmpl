@@ -26,4 +26,6 @@
       "extraKnownMarketplaces" $markets
       "enabledPlugins" $plugins
 -}}
+{{- /* model はプロファイル宣言にあるときだけ設定する。未指定ならプランに応じた既定に任せる。 */ -}}
+{{- if hasKey $p "model" }}{{ $_ := set $overlay "model" $p.model }}{{ end -}}
 {{ mergeOverwrite $base $overlay | toPrettyJson }}

@@ -44,6 +44,9 @@ excludeSkills = []
 name = "hucom-system"
 configDir = ".config/claude/hucom-system"
 explicitEnv = true
+# 法人 Max プランなので Fable 5 を既定モデルにする。personal は Pro のため指定しない
+# （Pro では Fable 5 がクレジット消費になるため、プランに応じた既定に任せる）。
+model = "claude-fable-5[1m]"
 excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   [[claudeProfiles.marketplaces]]
   name = "claude-plugins-official"
