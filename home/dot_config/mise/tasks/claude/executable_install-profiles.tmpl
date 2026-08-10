@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+#MISE description="chezmoi が生成したプロファイル構成を、実プロファイルへ安全に配置する"
+# 不可侵原則: プロファイルディレクトリは削除・改名・置換しない。
+# 触るのは許可リストの構成項目だけで、認証・状態・履歴・プラグインには一切触れない。
+# 進め方: 全プロファイルの事前検査 → staging へ複製・検証 → mv で差し替え。
+# 途中で失敗したら EXIT trap が差し替え済みの項目を退避から書き戻す。
+set -euo pipefail
+umask 077
+
+SRC_ROOT="$HOME/.config/claude-profile-config"
+OVERLAY_ROOT="$HOME/.config/claude/_private/profile-overlays"
+BACKUP_PARENT="$HOME/.config/claude/.migration-backups"
+LOCK="$HOME/.config/claude/.install-profiles.lock"
+
+# 実プロファイルへ配置する構成項目。skills は sync-links が扱うのでここには入れない。
+ALLOWLIST=(settings.json CLAUDE.md rules keybindings.json commands)
+
+# 絶対に触らない項目。検査でのみ参照する。
+PROTECTED_DIRS=(plugins projects sessions session-env backups cache)
+
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+exists() { [ -e "$1" ] || [ -L "$1" ]; }
+
+for c in jq shasum pgrep lsof claude cmp; do
+  command -v "$c" >/dev/null || die "$c が無い"
+done
+
+# 排他を先に取る。検査と変更の間に別インスタンスが入り込まないようにするため。
+mkdir -p "$(dirname "$LOCK")"
+mkdir "$LOCK" 2>/dev/null || die "別のインストールが動作中、またはロックが残っている: $LOCK"
+
+# ロールバック台帳。差し替えた項目を「配置先パス<TAB>退避パス」で記録する。
+ROLLBACK_LOG=()
+FINISHED=0
+on_exit() {
+  local rc=$?
+  if [ "$FINISHED" -ne 1 ] && [ ${#ROLLBACK_LOG[@]} -gt 0 ]; then
+    echo "失敗したため、差し替え済みの項目を退避から書き戻す" >&2
+    local i line dst_path bk_path
+    for (( i=${#ROLLBACK_LOG[@]}-1; i>=0; i-- )); do
+      line="${ROLLBACK_LOG[$i]}"
+      dst_path="${line%%$'\t'*}"; bk_path="${line#*$'\t'}"
+      if exists "$dst_path"; then /bin/mv "$dst_path" "$bk_path.failed-new" 2>/dev/null || true; fi
+      /bin/mv "$bk_path" "$dst_path" 2>/dev/null || echo "書き戻しに失敗: $bk_path -> $dst_path" >&2
+    done
+  fi
+  rmdir "$LOCK" 2>/dev/null || true
+  exit "$rc"
+}
+trap on_exit EXIT
+
+# Claude が動いている間は絶対に実行しない。PID だけ出す（引数に秘密が含まれうるため）。
+claude_stopped() {
+  local running
+  running="$(pgrep -f '(^|/)claude([[:space:]]|$)' || true)"
+  [ -z "$running" ] || die "Claude Code が動作中。すべて終了してから再実行する。PID: $(printf '%s' "$running" | tr '\n' ' ')"
+}
+claude_stopped
+
+install -d -m 700 "$BACKUP_PARENT"
+stamp="$(date '+%Y%m%dT%H%M%S')-$$"
+
+# explicitEnv に従って CLI と状態ファイルを解決する。personal に CLAUDE_CONFIG_DIR を
+# 明示すると別の .claude.json を見にいくため（前提となる実測事実）、必ず分岐する。
+auth_email() {
+  local explicit="$1" dir="$2" out
+  if [ "$explicit" = "yes" ]; then
+    out="$(env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN CLAUDE_CONFIG_DIR="$dir" claude auth status 2>/dev/null)" || return 1
+  else
+    out="$(env -u CLAUDE_CONFIG_DIR -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude auth status 2>/dev/null)" || return 1
+  fi
+  printf '%s' "$out" | jq -er 'if .loggedIn == true then .email else "not-logged-in" end'
+}
+
+state_file() {
+  local explicit="$1" dir="$2"
+  if [ "$explicit" = "yes" ]; then printf '%s/.claude.json' "$dir"; else printf '%s/.claude.json' "$HOME"; fi
+}
+
+fingerprint() {
+  local explicit="$1" dir="$2" sf rel
+  sf="$(state_file "$explicit" "$dir")"
+  [ -f "$sf" ] && [ ! -L "$sf" ] && shasum -a 256 "$sf"
+  for rel in "${PROTECTED_DIRS[@]}"; do
+    [ -d "$dir/$rel" ] && [ ! -L "$dir/$rel" ] && printf '%s\tdir-present\n' "$rel"
+  done
+  true
+}
+
+# --- 第1段階: 全プロファイルを、何も変更せずに検査する ---
+preflight() {
+  local name="$1" dst="$2" explicit="$3"
+  local src="$SRC_ROOT/$name"
+  [ -d "$src" ] && [ ! -L "$src" ] || die "$name: 生成元が実ディレクトリでない: $src。全プロファイルを生成してから実行する"
+  [ -f "$src/settings.json" ] || die "$name: 生成元に settings.json が無い"
+  exists "$src/CLAUDE.md" || die "$name: 生成元に CLAUDE.md が無い"
+  jq -e . "$src/settings.json" >/dev/null || die "$name: 生成元の settings.json が JSON でない"
+
+  # 生成元に許可リスト外の項目が無いこと。
+  local entry base
+  while IFS= read -r entry; do
+    base="${entry##*/}"
+    case " ${ALLOWLIST[*]} " in
+      *" $base "*) ;;
+      *) die "$name: 生成元に許可されていない項目がある: $base" ;;
+    esac
+  done < <(find -P "$src" -mindepth 1 -maxdepth 1 -print)
+
+  if [ -e "$dst" ]; then
+    [ -d "$dst" ] && [ ! -L "$dst" ] || die "$name: プロファイルルートが実ディレクトリでない: $dst"
+    [ "$(stat -f '%u' "$dst")" = "$(id -u)" ] || die "$name: 所有者が現在のユーザーでない"
+  fi
+}
+
+# --- 第2段階: staging へ複製・検証してから、mv で差し替える ---
+install_profile() {
+  local name="$1" dst="$2" explicit="$3"
+  local src="$SRC_ROOT/$name"
+  local backup="$BACKUP_PARENT/$name-$stamp"
+
+  if [ ! -e "$dst" ]; then
+    install -d -m 700 "$dst"
+    echo "[$name] プロファイルディレクトリを新規作成した"
+  fi
+
+  [ ! -e "$backup" ] || die "$name: 退避先が既にある: $backup"
+  mkdir -m 700 "$backup"
+  mkdir -m 700 "$backup/new"
+  [ "$(stat -f '%d' "$dst")" = "$(stat -f '%d' "$backup")" ] || die "$name: 退避先が同一ファイルシステムでない"
+
+  local email_before
+  email_before="$(auth_email "$explicit" "$dst")" || die "$name: 認証状態を取得できない"
+  fingerprint "$explicit" "$dst" >"$backup/protected.before"
+  printf '%s\n' "$email_before" >"$backup/auth-email.before"
+
+  # staging: 新構成を退避先の new/ へ複製し、検証を済ませる。
+  # -P でシンボリックリンクを辿らない。末尾スラッシュを付けない。
+  local base
+  for base in "${ALLOWLIST[@]}"; do
+    exists "$src/$base" || continue
+    cp -RP "$src/$base" "$backup/new/$base"
+  done
+  jq -e . "$backup/new/settings.json" >/dev/null || die "$name: staging の settings.json が壊れている"
+
+  # 非公開オーバーレイがあれば staging の settings.json へマージする。
+  # 公開宣言に書けないキー（取引先マーケットプレイス等）を上書きから温存するため。
+  if [ -f "$OVERLAY_ROOT/$name.settings.json" ]; then
+    jq -s '.[0] * .[1]' "$backup/new/settings.json" "$OVERLAY_ROOT/$name.settings.json" >"$backup/new/settings.json.merged"
+    jq -e . "$backup/new/settings.json.merged" >/dev/null || die "$name: オーバーレイのマージ結果が JSON でない"
+    /bin/mv "$backup/new/settings.json.merged" "$backup/new/settings.json"
+    echo "[$name] 非公開オーバーレイをマージした"
+  fi
+
+  # 差し替え直前にもう一度 Claude の停止を確認し、配下を開いているプロセスが無いことを見る。
+  claude_stopped
+  local open
+  open="$(lsof -t +D "$dst" 2>/dev/null | sort -u || true)"
+  [ -z "$open" ] || die "$name: 配下を開いているプロセスがある。PID: $(printf '%s' "$open" | tr '\n' ' ')"
+
+  # 旧構成を退避してから staging を mv で配置する。削除はしない。
+  for base in "${ALLOWLIST[@]}"; do
+    if exists "$dst/$base"; then
+      exists "$backup/$base" && die "$name: 退避先が既にある: $backup/$base"
+      /bin/mv "$dst/$base" "$backup/$base"
+      ROLLBACK_LOG+=("$dst/$base"$'\t'"$backup/$base")
+    fi
+  done
+  for base in "${ALLOWLIST[@]}"; do
+    exists "$backup/new/$base" || continue
+    exists "$dst/$base" && die "$name: 配置先が空でない: $dst/$base"
+    /bin/mv "$backup/new/$base" "$dst/$base"
+  done
+
+  # 暫定構成の skills はシンボリックリンクなので、退避して実ディレクトリへ置き換える。
+  if [ -L "$dst/skills" ]; then
+    exists "$backup/skills" && die "$name: 退避先が既にある: $backup/skills"
+    /bin/mv "$dst/skills" "$backup/skills"
+    ROLLBACK_LOG+=("$dst/skills"$'\t'"$backup/skills")
+    install -d -m 700 "$dst/skills"
+    echo "[$name] skills を実ディレクトリへ変換した。mise run claude:sync-links を実行すること"
+  fi
+
+  fingerprint "$explicit" "$dst" >"$backup/protected.after"
+  cmp -s "$backup/protected.before" "$backup/protected.after" || die "$name: 保護対象が変化した。退避: $backup"
+  local email_after
+  email_after="$(auth_email "$explicit" "$dst")" || die "$name: 配置後の認証状態を取得できない"
+  [ "$email_before" = "$email_after" ] || die "$name: 認証が変化した（$email_before -> $email_after）。退避: $backup"
+  printf '%s\n' "$email_after" >"$backup/auth-email.after"
+
+  echo "[$name] 配置完了。退避: $backup"
+}
+
+{{ range .claudeProfiles }}
+preflight "{{ .name }}" "$HOME/{{ .configDir }}" "{{ if .explicitEnv }}yes{{ else }}no{{ end }}"
+{{ end }}
+{{ range .claudeProfiles }}
+install_profile "{{ .name }}" "$HOME/{{ .configDir }}" "{{ if .explicitEnv }}yes{{ else }}no{{ end }}"
+{{ end }}
+
+FINISHED=1
+echo "すべて完了した。退避は検証が済むまで削除しないこと。"

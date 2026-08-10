@@ -108,57 +108,7 @@
       "Bash(brew services stop *)",
       "Bash(brew services restart *)"
     ],
-    "defaultMode": "auto",
-    "additionalDirectories": [
-      "~/.claude/",
-      "~/.config/mise/"
-    ]
-  },
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/cmux-notify.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/cmux-notify.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "bun run ~/.claude/statusline.ts",
-    "padding": 2
-  },
-  "enabledPlugins": {
-    "slack@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": false,
-    "cloudflare@cloudflare": true
-  },
-  "extraKnownMarketplaces": {
-    "cloudflare": {
-      "source": {
-        "source": "github",
-        "repo": "cloudflare/skills"
-      }
-    }
+    "defaultMode": "auto"
   },
   "language": "Japanese",
   "alwaysThinkingEnabled": true,

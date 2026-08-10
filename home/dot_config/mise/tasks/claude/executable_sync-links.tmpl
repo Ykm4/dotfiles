@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+#MISE description="共通スキルを各 Claude プロファイルへシンボリックリンクで配布する"
+# 宣言は chezmoi の .chezmoidata/claude-profiles.toml。宣言に無いリンクは掃除する。
+# rules・keybindings・commands は chezmoi の symlink_ が宣言的に扱うのでここでは触らない。
+set -euo pipefail
+
+SHARED="$HOME/.config/claude/_shared/skills"
+PRIVATE="$HOME/.config/claude/_private/skills"
+AGENTS="$HOME/.agents/skills"
+BACKUP_ROOT="$HOME/.config/claude/.migration-backups/sync-links-$(date '+%Y%m%dT%H%M%S')-$$"
+FAILED=0
+
+# 欠けているルートがあっても止めない。新マシンの bootstrap を巻き込まないため。
+ROOTS=()
+for root in "$SHARED" "$PRIVATE" "$AGENTS"; do
+  if [ -d "$root" ]; then ROOTS+=("$root"); else echo "[sync-links] 未配置のためスキップ: $root" >&2; fi
+done
+[ ${#ROOTS[@]} -gt 0 ] || { echo "[sync-links] 配布元が1つも無い。何もしない"; exit 0; }
+
+# 同名衝突を先に検出する。後勝ちで無言に上書きされるのを防ぐ。ディレクトリだけを数える。
+dup=$(for r in "${ROOTS[@]}"; do find -P "$r" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null; done | sort | uniq -d)
+if [ -n "$dup" ]; then
+  echo "[sync-links] スキル名が衝突している。宣言で解決すること:" >&2
+  echo "$dup" >&2
+  exit 1
+fi
+
+# リンクの指す先を絶対パスへ解決する。相対リンクも判定できるようにするため。
+resolve_target() {
+  local link="$1" raw dir
+  raw="$(readlink "$link")" || return 1
+  case "$raw" in
+    /*) ;;
+    *) raw="$(dirname "$link")/$raw" ;;
+  esac
+  dir="$(cd -P "$(dirname "$raw")" 2>/dev/null && pwd)" || return 1
+  printf '%s/%s\n' "$dir" "$(basename "$raw")"
+}
+
+replace_with_link() {
+  local target="$1" source="$2" profile="$3"
+  if [ -L "$target" ]; then
+    [ "$(readlink "$target")" = "$source" ] || ln -snf "$source" "$target"
+    return 0
+  fi
+  if [ -e "$target" ]; then
+    if diff -r -q --exclude=node_modules --exclude=bun.lock --exclude=.git --exclude=state "$target" "$source" >/dev/null 2>&1; then
+      mkdir -p "$BACKUP_ROOT/$profile/skills"
+      mv "$target" "$BACKUP_ROOT/$profile/skills/$(basename "$target")"
+    else
+      echo "[sync-links] 内容が共有元と違うため置き換えない: $target" >&2
+      FAILED=1
+      return 0
+    fi
+  fi
+  ln -snf "$source" "$target"
+}
+
+{{ range .claudeProfiles }}
+{{- $profile := . }}
+PROFILE_DIR="$HOME/{{ $profile.configDir }}"
+PROFILE_NAME="{{ $profile.name }}"
+if [ ! -d "$PROFILE_DIR" ]; then
+  echo "[sync-links] 未配置のためスキップ: $PROFILE_DIR" >&2
+elif [ -L "$PROFILE_DIR/skills" ]; then
+  # 暫定構成の skills は別プロファイルの実体を指すリンクである。辿って書き込むと
+  # リンク先（personal）の実体に作用してしまうため、変換されるまで扱わない。
+  echo "[sync-links] $PROFILE_NAME: skills がシンボリックリンク（暫定構成）のためスキップ。先に claude:install-profiles で実ディレクトリへ変換すること" >&2
+  FAILED=1
+else
+  mkdir -p "$PROFILE_DIR/skills"
+  EXCLUDES=" {{ range $profile.excludeSkills }}{{ . }} {{ end }}"
+  DECLARED=""
+  for root in "${ROOTS[@]}"; do
+    for src in "$root"/*/; do
+      [ -d "$src" ] || continue
+      name="$(basename "$src")"
+      case "$EXCLUDES" in *" $name "*) continue ;; esac
+      DECLARED="$DECLARED $name"
+      replace_with_link "$PROFILE_DIR/skills/$name" "${src%/}" "$PROFILE_NAME"
+    done
+  done
+  for existing in "$PROFILE_DIR/skills"/*; do
+    [ -L "$existing" ] || continue
+    name="$(basename "$existing")"
+    case " $DECLARED " in *" $name "*) continue ;; esac
+    dest="$(resolve_target "$existing" || true)"
+    keep=1
+    for root in "${ROOTS[@]}"; do
+      case "$dest" in "$root"/*) keep=0 ;; esac
+    done
+    if [ "$keep" -eq 0 ]; then
+      unlink "$existing"
+      echo "[sync-links] $PROFILE_NAME: 宣言から外れた $name のリンクを削除した"
+    else
+      echo "[sync-links] $PROFILE_NAME: 管理外のリンクなので残す: $name" >&2
+    fi
+  done
+fi
+{{ end }}
+
+if [ "$FAILED" -ne 0 ]; then
+  echo "[sync-links] 置き換えられなかった実体がある。内容を確認して解消すること" >&2
+  exit 1
+fi
+[ -d "$BACKUP_ROOT" ] && echo "[sync-links] 退避先: $BACKUP_ROOT"
+echo "[sync-links] 配布完了"

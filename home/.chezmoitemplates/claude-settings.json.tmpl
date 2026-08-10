@@ -1,0 +1,29 @@
+{{/*
+  Claude プロファイルの settings.json を生成する共通テンプレート。
+  呼び出し側: {{ includeTemplate "claude-settings.json.tmpl" (dict "profileName" "<名前>" "root" .) }}
+  注意: claude-settings-base.json もテンプレートとして実行される。中身に {{ を書かないこと。
+*/ -}}
+{{- $name := .profileName -}}
+{{- $p := "" -}}
+{{- range .root.claudeProfiles }}{{ if eq .name $name }}{{ $p = . }}{{ end }}{{ end -}}
+{{- $markets := dict -}}
+{{- range $p.marketplaces }}{{ if eq .kind "github" }}{{ $_ := set $markets .name (dict "source" (dict "source" "github" "repo" .repo)) }}{{ end }}{{ end -}}
+{{- $plugins := dict -}}
+{{- range $p.plugins }}{{ $_ := set $plugins .id .enabled }}{{ end -}}
+{{- $notify := "~/.config/claude/_shared/scripts/cmux-notify.sh" -}}
+{{- $base := includeTemplate "claude-settings-base.json" . | fromJson -}}
+{{- $overlay := dict
+      "permissions" (dict "additionalDirectories" (list
+        (printf "~/%s/" $p.configDir)
+        "~/.config/claude/_shared/"
+        "~/.config/claude/_private/"
+        "~/.agents/skills/"
+        "~/.config/mise/"))
+      "hooks" (dict
+        "Stop" (list (dict "matcher" "" "hooks" (list (dict "type" "command" "command" $notify "timeout" 10))))
+        "Notification" (list (dict "matcher" "permission_prompt" "hooks" (list (dict "type" "command" "command" $notify "timeout" 10)))))
+      "statusLine" (dict "type" "command" "command" "bun run ~/.config/claude/_shared/statusline.ts" "padding" 2)
+      "extraKnownMarketplaces" $markets
+      "enabledPlugins" $plugins
+-}}
+{{ mergeOverwrite $base $overlay | toPrettyJson }}

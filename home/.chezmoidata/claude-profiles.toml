@@ -1,0 +1,116 @@
+# Claude Code のプロファイル定義。公開側の宣言点はここだけ。
+# settings.json・claude:restore・claude:sync-links がすべてこのデータから生成される。
+# 取引先名を含むキーだけは ~/.config/claude/_private/profile-overlays/ が補い、
+# インストーラーが配置前にマージする。
+#
+# name          プロファイル名
+# configDir     $HOME からの相対パス
+# explicitEnv   false のとき CLAUDE_CONFIG_DIR を設定せずに CLI を呼ぶ。
+#               personal は既定値で動く。true にすると .claude.json が二重になる。
+# excludeSkills 配布から除外するスキル名
+# marketplaces  kind は builtin か github
+# plugins       id と enabled
+# mcp           name / transport / url または urlEnv / header（任意）
+#               社内エンドポイントは urlEnv に環境変数名だけを書き、値は書かない。
+#               API キーはプロファイルごとに環境変数名を分ける。ヘッダ名は同じでも
+#               参照する変数名を変えることで、トークンをディレクトリではなく
+#               プロファイルに従わせる（personal: CONTEXT7_API_KEY、
+#               hucom-system: CONTEXT7_API_KEY_HUCOM_SYSTEM）。
+
+[[claudeProfiles]]
+name = "personal"
+configDir = ".claude"
+explicitEnv = false
+excludeSkills = []
+  [[claudeProfiles.marketplaces]]
+  name = "claude-plugins-official"
+  kind = "builtin"
+  [[claudeProfiles.plugins]]
+  id = "superpowers@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "typescript-lsp@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "plugin-dev@claude-plugins-official"
+  enabled = false
+  [[claudeProfiles.mcp]]
+  name = "context7"
+  transport = "http"
+  url = "https://mcp.context7.com/mcp"
+  header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}"
+
+[[claudeProfiles]]
+name = "hucom-system"
+configDir = ".config/claude/hucom-system"
+explicitEnv = true
+excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
+  [[claudeProfiles.marketplaces]]
+  name = "claude-plugins-official"
+  kind = "builtin"
+  [[claudeProfiles.marketplaces]]
+  name = "cloudflare"
+  kind = "github"
+  repo = "cloudflare/skills"
+  [[claudeProfiles.marketplaces]]
+  name = "hucom-system"
+  kind = "github"
+  repo = "hucom-system/claude-plugins"
+  [[claudeProfiles.plugins]]
+  id = "superpowers@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "typescript-lsp@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "slack@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "plugin-dev@claude-plugins-official"
+  enabled = false
+  [[claudeProfiles.plugins]]
+  id = "cloudflare@cloudflare"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "back-office@hucom-system"
+  enabled = true
+  [[claudeProfiles.mcp]]
+  name = "context7"
+  transport = "http"
+  url = "https://mcp.context7.com/mcp"
+  header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY_HUCOM_SYSTEM}"
+
+[[claudeProfiles]]
+name = "hucom"
+configDir = ".config/claude/hucom"
+explicitEnv = true
+excludeSkills = ["agents-sdk", "durable-objects", "wrangler"]
+  [[claudeProfiles.marketplaces]]
+  name = "claude-plugins-official"
+  kind = "builtin"
+  [[claudeProfiles.marketplaces]]
+  name = "cloudflare"
+  kind = "github"
+  repo = "cloudflare/skills"
+  [[claudeProfiles.plugins]]
+  id = "superpowers@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "typescript-lsp@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "plugin-dev@claude-plugins-official"
+  enabled = false
+  [[claudeProfiles.plugins]]
+  id = "cloudflare@cloudflare"
+  enabled = true
+  [[claudeProfiles.mcp]]
+  name = "context7"
+  transport = "http"
+  url = "https://mcp.context7.com/mcp"
+  # hucom 用のキーは未発行。発行後に CONTEXT7_API_KEY_HUCOM へ分ける。
+  header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}"
+  [[claudeProfiles.mcp]]
+  name = "mfc_ca_hucom"
+  transport = "http"
+  urlEnv = "MFC_CA_HUCOM_URL"
