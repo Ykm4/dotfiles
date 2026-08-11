@@ -1,0 +1,6 @@
+[env]
+# この配下では Claude Code・gws CLI・gcloud をまとめて hucom-system プロファイルに向ける。
+# dotfiles の整備は業務プロファイルで行うため。
+CLAUDE_CONFIG_DIR = "{{ env.HOME }}/.config/claude/hucom-system"
+GOOGLE_WORKSPACE_CLI_CONFIG_DIR = "{{ env.HOME }}/.config/gws/hucom-system"
+CLOUDSDK_ACTIVE_CONFIG_NAME = "hucom-system"
