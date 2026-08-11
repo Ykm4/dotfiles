@@ -64,10 +64,12 @@ stamp="$(date '+%Y%m%dT%H%M%S')-$$"
 # 明示すると別の .claude.json を見にいくため（前提となる実測事実）、必ず分岐する。
 auth_email() {
   local explicit="$1" dir="$2" out
+  # claude auth status は未ログイン時、JSON を出力しつつ終了コード非0で終わる（実測）。
+  # 終了コードは見ず、出力が正しい JSON であることだけを検証する。
   if [ "$explicit" = "yes" ]; then
-    out="$(env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN CLAUDE_CONFIG_DIR="$dir" claude auth status 2>/dev/null)" || return 1
+    out="$(env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN CLAUDE_CONFIG_DIR="$dir" claude auth status 2>/dev/null)" || true
   else
-    out="$(env -u CLAUDE_CONFIG_DIR -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude auth status 2>/dev/null)" || return 1
+    out="$(env -u CLAUDE_CONFIG_DIR -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN claude auth status 2>/dev/null)" || true
   fi
   printf '%s' "$out" | jq -er 'if .loggedIn == true then .email else "not-logged-in" end'
 }
