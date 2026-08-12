@@ -50,3 +50,4 @@ cmux独自キーも`set`で扱える。
 - `font-family`や`keybind`のように有効な行が複数あるキーは、意図しない上書きを避けるため自動編集せずエラーで終了する。
 - `font-size`は小数も指定できる（高DPI表示での半ポイント指定に対応）。
 - 検証時は環境変数`GHOSTTY_CONFIG`で対象ファイルを差し替えられる。
+- **テーマを変えても見た目が変わらないときは、cmux 側の上書きを疑う。** `cmux themes` の `Source` が `~/Library/Application Support/com.cmuxterm.app/config.ghostty` を指していたら、`cmux themes set` による上書きが設定ファイルより優先されている。`cmux themes clear` で解除すると `~/.config/ghostty/config` の `theme` に戻る（2026-08-12 実測）。
