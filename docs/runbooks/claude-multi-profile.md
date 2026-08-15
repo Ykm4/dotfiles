@@ -1,7 +1,7 @@
 # Claude Code マルチプロファイル運用
 
 作業ディレクトリに応じて Claude Code の設定・履歴・MCP・プラグイン・認証を
-personal / hucom-system / hucom の3プロファイルへ切り替える仕組みの運用手順。
+personal / hucom-system / hucom / client の4プロファイルへ切り替える仕組みの運用手順。
 
 ## 構成の要点
 
@@ -24,6 +24,10 @@ personal / hucom-system / hucom の3プロファイルへ切り替える仕組�
 3. `chezmoi apply ~/.config/claude-profile-config` で生成し、
    Claude を全終了して `mise run claude:install-profiles` → `mise run claude:sync-links`。
 4. 対象ディレクトリの mise か direnv に `CLAUDE_CONFIG_DIR` を注入する。
+
+取引先は1社ごとにプロファイルを増やす（1社目は `client`。増えたら別の中立名を足し、
+既存は改名しない）。公開側には取引先名を書かず、対象ディレクトリとの対応は
+非公開側（`_private/CLAUDE-common.md`）で解決する。
 
 ## 共通スキルの足し方
 

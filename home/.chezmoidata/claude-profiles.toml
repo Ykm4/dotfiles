@@ -117,3 +117,59 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler"]
   name = "mfc_ca_hucom"
   transport = "http"
   urlEnv = "MFC_CA_HUCOM_URL"
+
+[[claudeProfiles]]
+name = "client"
+configDir = ".config/claude/client"
+explicitEnv = true
+# 取引先1社ごとにプロファイルを作る（1社目は client。増えたら別の中立名を足し、既存は改名しない）。
+# 対象ディレクトリと取引先固有のキーは非公開側にある。
+# ログインは hucom-system と同じ法人アカウント（法人 Max のため Fable 5 を既定にする）。
+model = "claude-fable-5[1m]"
+# 取引先作業に不要な自社業務スキル（gws・mf-expense）と cloudflare 系を配布から外す。
+excludeSkills = [
+  "agents-sdk", "durable-objects", "wrangler", "mf-expense",
+  "gws-admin-reports", "gws-calendar", "gws-calendar-agenda", "gws-calendar-insert",
+  "gws-chat", "gws-chat-send", "gws-classroom", "gws-docs", "gws-docs-write",
+  "gws-drive", "gws-drive-upload", "gws-events", "gws-events-renew",
+  "gws-events-subscribe", "gws-forms", "gws-gmail", "gws-gmail-forward",
+  "gws-gmail-read", "gws-gmail-reply", "gws-gmail-reply-all", "gws-gmail-send",
+  "gws-gmail-triage", "gws-gmail-watch", "gws-keep", "gws-meet", "gws-modelarmor",
+  "gws-modelarmor-create-template", "gws-modelarmor-sanitize-prompt",
+  "gws-modelarmor-sanitize-response", "gws-people", "gws-script", "gws-script-push",
+  "gws-shared", "gws-sheets", "gws-sheets-append", "gws-sheets-read", "gws-slides",
+  "gws-tasks", "gws-workflow", "gws-workflow-email-to-task",
+  "gws-workflow-file-announce", "gws-workflow-meeting-prep",
+  "gws-workflow-standup-report", "gws-workflow-weekly-digest",
+]
+  [[claudeProfiles.marketplaces]]
+  name = "claude-plugins-official"
+  kind = "builtin"
+  # AWS 公式マーケットプレイス。aws-core が skills 一式と aws-mcp（uvx 経由）を持つ
+  [[claudeProfiles.marketplaces]]
+  name = "agent-toolkit-for-aws"
+  kind = "github"
+  repo = "aws/agent-toolkit-for-aws"
+  [[claudeProfiles.plugins]]
+  id = "superpowers@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "typescript-lsp@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "slack@claude-plugins-official"
+  enabled = true
+  [[claudeProfiles.plugins]]
+  id = "aws-core@agent-toolkit-for-aws"
+  enabled = true
+  [[claudeProfiles.mcp]]
+  name = "context7"
+  transport = "http"
+  url = "https://mcp.context7.com/mcp"
+  # 取引先案件も自社業務の一部のため hucom-system のキーを共用する
+  header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY_HUCOM_SYSTEM}"
+  # AWS 公式のフルマネージドなリモート MCP。認証不要
+  [[claudeProfiles.mcp]]
+  name = "aws-knowledge"
+  transport = "http"
+  url = "https://knowledge-mcp.global.api.aws"
