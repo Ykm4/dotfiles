@@ -1,3 +1,7 @@
+{{- /* 公開の claudeProfiles と非公開の clientProfiles（client-dotfiles。無ければ空）を連結する */ -}}
+{{- $client := dict -}}
+{{- if hasKey . "clientProfiles" }}{{ $client = .clientProfiles }}{{ end -}}
+{{- $all := merge (dict) .claudeProfiles $client -}}
 #!/usr/bin/env bash
 #MISE description="chezmoi が生成したプロファイル構成を、実プロファイルへ安全に配置する"
 # 不可侵原則: プロファイルディレクトリは削除・改名・置換しない。
@@ -20,6 +24,24 @@ PROTECTED_DIRS=(plugins projects sessions session-env backups cache)
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 exists() { [ -e "$1" ] || [ -L "$1" ]; }
+
+# 引数でプロファイルを絞り込める（例: mise run claude:install-profiles -- client）。
+# 無指定なら全プロファイルを対象にする。絞り込み時は Claude の全終了を要求せず、
+# 対象プロファイル配下を開いているプロセスが無いことだけを検査する。
+# explicitEnv=false のプロファイルは状態ファイル（~/.claude.json）がプロファイル外に
+# あり使用中を検査しきれないため、全体実行（引数なし）でのみ差し替える。
+TARGETS=("$@")
+targeted() { [ ${#TARGETS[@]} -gt 0 ]; }
+wanted() {
+  targeted || return 0
+  local t
+  for t in "${TARGETS[@]}"; do [ "$t" = "$1" ] && return 0; done
+  return 1
+}
+KNOWN=" {{ range $name, $p := $all }}{{ $name }} {{ end }}"
+for t in ${TARGETS[@]+"${TARGETS[@]}"}; do
+  case "$KNOWN" in *" $t "*) ;; *) die "未知のプロファイル: $t（候補:$KNOWN）" ;; esac
+done
 
 for c in jq shasum pgrep lsof claude cmp; do
   command -v "$c" >/dev/null || die "$c が無い"
@@ -55,7 +77,11 @@ claude_stopped() {
   running="$(pgrep -f '(^|/)claude([[:space:]]|$)' || true)"
   [ -z "$running" ] || die "Claude Code が動作中。すべて終了してから再実行する。PID: $(printf '%s' "$running" | tr '\n' ' ')"
 }
-claude_stopped
+if targeted; then
+  echo "対象を絞るため Claude の全終了チェックを省略する: ${TARGETS[*]}"
+else
+  claude_stopped
+fi
 
 install -d -m 700 "$BACKUP_PARENT"
 stamp="$(date '+%Y%m%dT%H%M%S')-$$"
@@ -112,6 +138,15 @@ preflight() {
     [ -d "$dst" ] && [ ! -L "$dst" ] || die "$name: プロファイルルートが実ディレクトリでない: $dst"
     [ "$(stat -f '%u' "$dst")" = "$(id -u)" ] || die "$name: 所有者が現在のユーザーでない"
   fi
+
+  if targeted; then
+    [ "$explicit" = "yes" ] || die "$name: explicitEnv=false のプロファイルは全体実行（引数なし）でのみ差し替える"
+    if [ -e "$dst" ]; then
+      local open
+      open="$(lsof -t +D "$dst" 2>/dev/null | sort -u || true)"
+      [ -z "$open" ] || die "$name: 配下を開いているプロセスがある。PID: $(printf '%s' "$open" | tr '\n' ' ')"
+    fi
+  fi
 }
 
 # --- 第2段階: staging へ複製・検証してから、mv で差し替える ---
@@ -153,8 +188,9 @@ install_profile() {
     echo "[$name] 非公開オーバーレイをマージした"
   fi
 
-  # 差し替え直前にもう一度 Claude の停止を確認し、配下を開いているプロセスが無いことを見る。
-  claude_stopped
+  # 差し替え直前にもう一度 Claude の停止（絞り込み時は省略）を確認し、
+  # 配下を開いているプロセスが無いことを見る。
+  targeted || claude_stopped
   local open
   open="$(lsof -t +D "$dst" 2>/dev/null | sort -u || true)"
   [ -z "$open" ] || die "$name: 配下を開いているプロセスがある。PID: $(printf '%s' "$open" | tr '\n' ' ')"
@@ -192,15 +228,15 @@ install_profile() {
   echo "[$name] 配置完了。退避: $backup"
 }
 
-{{- /* 公開の claudeProfiles と非公開の clientProfiles（client-dotfiles。無ければ空）を連結する */}}
-{{- $client := dict }}
-{{- if hasKey . "clientProfiles" }}{{ $client = .clientProfiles }}{{ end }}
-{{- $all := merge (dict) .claudeProfiles $client }}
 {{ range $name, $p := $all }}
-preflight "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
+if wanted "{{ $name }}"; then
+  preflight "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
+fi
 {{ end }}
 {{ range $name, $p := $all }}
-install_profile "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
+if wanted "{{ $name }}"; then
+  install_profile "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
+fi
 {{ end }}
 
 FINISHED=1

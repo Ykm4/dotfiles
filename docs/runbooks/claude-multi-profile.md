@@ -15,9 +15,12 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
   実プロファイル（`~/.claude`・`~/.config/claude/<name>`）はランタイム領域であり、
   `mise run claude:install-profiles` だけが構成6項目
   （`settings.json`・`CLAUDE.md`・`rules`・`keybindings.json`・`commands`・`skills`）を差し替える。
-- インストーラーは Claude の全終了を検査し、旧構成を
+- インストーラーは全体実行では Claude の全終了を検査し、旧構成を
   `~/.config/claude/.migration-backups/` へ退避してから mv で差し替える。
   途中で失敗すると差し替え済みの項目を自動で書き戻す。
+- `mise run claude:install-profiles -- <名前>` でプロファイルを絞り込める。
+  絞り込み時は全終了の代わりに、対象配下を開いているプロセスが無いことを検査する
+  （explicitEnv=false のプロファイルは全体実行でのみ差し替える）。
 
 ## プロファイルの増やし方
 
@@ -25,7 +28,8 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 2. `home/dot_config/claude-profile-config/<name>/` に薄いラッパー4本を置く
    （`private_settings.json.tmpl`・`CLAUDE.md`・`symlink_rules.tmpl`・`symlink_keybindings.json.tmpl`）。
 3. `chezmoi apply ~/.config/claude-profile-config` で生成し、
-   Claude を全終了して `mise run claude:install-profiles` → `mise run claude:sync-links`。
+   `mise run claude:install-profiles -- <名前>` → `mise run claude:sync-links`。
+   新設プロファイルだけなら Claude を終了せずに配置できる。
 4. 対象ディレクトリの mise か direnv に `CLAUDE_CONFIG_DIR` を注入する。
 
 取引先は1社ごとにプロファイルを増やす（1社目は `client`。増えたら別の中立名を足し、
