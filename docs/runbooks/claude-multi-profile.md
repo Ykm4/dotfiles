@@ -5,9 +5,12 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 
 ## 構成の要点
 
-- プロファイルの宣言は `home/.chezmoidata/claude-profiles.toml` の1か所（公開ベース）。
-  取引先固有のキーは `~/.config/claude/_private/profile-overlays/<profile>.settings.json`
-  （非公開リポジトリ）が補い、インストーラーが配置時にマージする。
+- プロファイルの宣言は2か所。自分・自社は `home/.chezmoidata/claude-profiles.toml`（公開）、
+  取引先は `home/work/`（非公開 client-dotfiles の git submodule）の `.chezmoidata` にある
+  `clientProfiles` で、テンプレートが両辞書を連結する。
+- 非公開キーを settings.json へ足すオーバーレイ
+  （`~/.config/claude/_private/profile-overlays/<profile>.settings.json`）は
+  インストーラーが配置時にマージする。現在は未使用で、仕組みだけ残している。
 - chezmoi が書き込むのは `~/.config/claude-profile-config/<profile>/` まで。
   実プロファイル（`~/.claude`・`~/.config/claude/<name>`）はランタイム領域であり、
   `mise run claude:install-profiles` だけが構成6項目
@@ -26,8 +29,9 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 4. 対象ディレクトリの mise か direnv に `CLAUDE_CONFIG_DIR` を注入する。
 
 取引先は1社ごとにプロファイルを増やす（1社目は `client`。増えたら別の中立名を足し、
-既存は改名しない）。公開側には取引先名を書かず、対象ディレクトリとの対応は
-非公開側（`_private/CLAUDE-common.md`）で解決する。
+既存は改名しない）。取引先プロファイルの宣言は手順1の場所ではなく、client-dotfiles の
+`.chezmoidata` に `clientProfiles` として書く。公開側には取引先名を書かず、
+対象ディレクトリとの対応は非公開側（`_private/CLAUDE-common.md`）で解決する。
 
 ## 共通スキルの足し方
 
@@ -53,10 +57,11 @@ env -u CLAUDE_CONFIG_DIR claude auth status           # personal の認証を確
 ## 新マシンでの復元順
 
 1. このリポジトリを clone して chezmoi を初期化する
+   （`home/work/` の非公開 submodule も取得されるため GitHub 認証が要る）
 2. `~/.config/claude/_private` に非公開共通層リポジトリを clone する
 3. 作業リポジトリを clone する
 4. 対象を限定して `chezmoi apply` する（`~/.config/claude/_shared`・
-   `~/.config/claude-profile-config`・`~/.config/mise`・`~/work/hucom/mise.toml`）。
+   `~/.config/claude-profile-config`・`~/.config/mise`・`~/work/`）。
    実プロファイルは対象にしない
 5. `~/.agents/skills` を Skillsfile の復元タスクで先に揃える（`claude:sync-links` の配布元）
 6. 公開・非公開スキルの実行時依存を `bun install` で復元する
@@ -64,7 +69,8 @@ env -u CLAUDE_CONFIG_DIR claude auth status           # personal の認証を確
    （`_private/profile-overlays/` もここでマージされる）
 8. `mise run claude:sync-links` でスキルを配る
 9. `mise trust` と `direnv allow` を実行する
-10. 取引先ディレクトリへ `_private/work/` の設定を配置する（詳細は非公開側を参照）
+10. 取引先ディレクトリの配置物（envrc・mise.toml・settings.local.json）は
+    手順4の `chezmoi apply` が submodule 経由で配る。追加の手作業は不要
 11. 各プロファイルで `/login` する
 12. `mise run claude:restore` を実行する
 13. 取引先向け local スコープのプラグインは宣言の外にある。

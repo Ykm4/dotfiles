@@ -1,5 +1,0 @@
-[env]
-# この配下では Claude Code・gws CLI・gcloud をまとめて hucom プロファイルに向ける。
-CLAUDE_CONFIG_DIR = "{{ env.HOME }}/.config/claude/hucom"
-GOOGLE_WORKSPACE_CLI_CONFIG_DIR = "{{ env.HOME }}/.config/gws/hucom"
-CLOUDSDK_ACTIVE_CONFIG_NAME = "hucom"

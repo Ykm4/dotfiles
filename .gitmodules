@@ -1,0 +1,3 @@
+[submodule "home/work"]
+	path = home/work
+	url = https://github.com/Ykm4/client-dotfiles.git
