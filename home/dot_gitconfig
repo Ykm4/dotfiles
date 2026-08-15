@@ -24,3 +24,9 @@
 	allowedSignersFile = ~/.config/git/allowed_signers
 [commit]
 	gpgsign = true
+; 会社リポジトリのコミットを個人アドレスで記録しないための上書き。
+; 末尾の / により配下すべてに再帰的に適用される。/i は macOS の
+; 大文字小文字を区別しないパスでも取りこぼさないため。
+; [user] より後に置くこと。後勝ちで上書きされる。
+[includeIf "gitdir/i:~/work/hucom-system/"]
+	path = ~/.config/git/config.d/hucom-system

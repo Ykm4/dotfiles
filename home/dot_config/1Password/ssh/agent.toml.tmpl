@@ -4,6 +4,12 @@
 item  = "git-signing"
 vault = "dotfiles"
 
+# 自社リポジトリ（~/work/hucom-system/ 配下）のコミット署名用。
+# 個人用の git-signing と分けている。git 側の切替は ~/.config/git/config.d/hucom-system。
+[[ssh-keys]]
+item  = "git-signing-hucom-system"
+vault = "hucomsystem"
+
 # 取引先の踏み台鍵（dev / stg）。item 名と vault 名は取引先の識別子にあたるため 1Password から注入する。
 [[ssh-keys]]
 item  = "{{ onepasswordRead "op://dotfiles/identity/ssh-item-partner-b-dev" }}"

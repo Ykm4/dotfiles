@@ -1,1 +1,4 @@
 ykum4suke@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPAnTxCnV0LEohWxHFJqNLT5rG0Xy3B989xHCT7bapRz
+# ~/work/hucom-system/ 配下の業務用の鍵（1Password: hucomsystem / git-signing-hucom-system）。
+# 上の個人用とは別鍵にしている。git 側の切替は ~/.config/git/config.d/hucom-system。
+yusuke.matsukuma@hucomsystem.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFXDUOInNSRr5UOaiLa51wqqCNcadUIq+9HJa0+wH2uH

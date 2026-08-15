@@ -1,0 +1,8 @@
+; ~/work/hucom-system/ 配下でのみ読み込まれる。読み込み条件は ~/.gitconfig の includeIf にある。
+; 会社リポジトリのコミットが個人アドレスで記録されるのを防ぐための上書き。
+[user]
+	email = yusuke.matsukuma@hucomsystem.com
+	; 業務用の署名鍵。1Password の hucomsystem vault の git-signing-hucom-system が実体で、
+	; ~/.config/1Password/ssh/agent.toml の許可リストに載せている。
+	; GitHub 側にも同名で signing key として登録済み。
+	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFXDUOInNSRr5UOaiLa51wqqCNcadUIq+9HJa0+wH2uH
