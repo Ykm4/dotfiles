@@ -4,8 +4,9 @@
   注意: claude-settings-base.json もテンプレートとして実行される。中身に {{ を書かないこと。
 */ -}}
 {{- $name := .profileName -}}
-{{- $p := "" -}}
-{{- range .root.claudeProfiles }}{{ if eq .name $name }}{{ $p = . }}{{ end }}{{ end -}}
+{{- $client := dict -}}
+{{- if hasKey .root "clientProfiles" }}{{ $client = .root.clientProfiles }}{{ end -}}
+{{- $p := get (merge (dict) .root.claudeProfiles $client) $name -}}
 {{- $markets := dict -}}
 {{- range $p.marketplaces }}{{ if eq .kind "github" }}{{ $_ := set $markets .name (dict "source" (dict "source" "github" "repo" .repo)) }}{{ end }}{{ end -}}
 {{- $plugins := dict -}}
@@ -26,6 +27,7 @@
       "extraKnownMarketplaces" $markets
       "enabledPlugins" $plugins
 -}}
-{{- /* model はプロファイル宣言にあるときだけ設定する。未指定ならプランに応じた既定に任せる。 */ -}}
+{{- /* model と theme はプロファイル宣言にあるときだけ設定する。未指定なら既定に任せる。 */ -}}
 {{- if hasKey $p "model" }}{{ $_ := set $overlay "model" $p.model }}{{ end -}}
+{{- if hasKey $p "theme" }}{{ $_ := set $overlay "theme" $p.theme }}{{ end -}}
 {{ mergeOverwrite $base $overlay | toPrettyJson }}

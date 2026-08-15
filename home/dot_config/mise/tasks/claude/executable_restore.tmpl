@@ -22,11 +22,14 @@ run_claude() {
   fi
 }
 
-{{ range .claudeProfiles }}
-{{- $p := . }}
+{{- /* 公開の claudeProfiles と非公開の clientProfiles（client-dotfiles。無ければ空）を連結する */}}
+{{- $client := dict }}
+{{- if hasKey . "clientProfiles" }}{{ $client = .clientProfiles }}{{ end }}
+{{- $all := merge (dict) .claudeProfiles $client }}
+{{ range $name, $p := $all }}
 {{- $explicit := "no" }}{{ if $p.explicitEnv }}{{ $explicit = "yes" }}{{ end }}
-echo "=== {{ $p.name }} ==="
-NAME="{{ $p.name }}"; DIR="$HOME/{{ $p.configDir }}"; EXPLICIT="{{ $explicit }}"
+echo "=== {{ $name }} ==="
+NAME="{{ $name }}"; DIR="$HOME/{{ $p.configDir }}"; EXPLICIT="{{ $explicit }}"
 if [ ! -d "$DIR" ]; then
   echo "  設定ディレクトリが無い: $DIR" >&2; rc=1
 else

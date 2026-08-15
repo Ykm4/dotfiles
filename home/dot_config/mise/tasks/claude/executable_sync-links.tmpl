@@ -56,10 +56,13 @@ replace_with_link() {
   ln -snf "$source" "$target"
 }
 
-{{ range .claudeProfiles }}
-{{- $profile := . }}
+{{- /* 公開の claudeProfiles と非公開の clientProfiles（client-dotfiles。無ければ空）を連結する */}}
+{{- $client := dict }}
+{{- if hasKey . "clientProfiles" }}{{ $client = .clientProfiles }}{{ end }}
+{{- $all := merge (dict) .claudeProfiles $client }}
+{{ range $name, $profile := $all }}
 PROFILE_DIR="$HOME/{{ $profile.configDir }}"
-PROFILE_NAME="{{ $profile.name }}"
+PROFILE_NAME="{{ $name }}"
 if [ ! -d "$PROFILE_DIR" ]; then
   echo "[sync-links] 未配置のためスキップ: $PROFILE_DIR" >&2
 elif [ -L "$PROFILE_DIR/skills" ]; then

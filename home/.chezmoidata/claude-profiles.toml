@@ -1,13 +1,16 @@
 # Claude Code のプロファイル定義。公開側の宣言点はここだけ。
 # settings.json・claude:restore・claude:sync-links がすべてこのデータから生成される。
-# 取引先名を含むキーだけは ~/.config/claude/_private/profile-overlays/ が補い、
-# インストーラーが配置前にマージする。
+# claudeProfiles はプロファイル名をキーにした辞書。取引先のプロファイルは非公開側
+# （client-dotfiles の .chezmoidata）が clientProfiles として同じ形で宣言し、
+# テンプレートが両辞書を連結する。chezmoi のデータマージは配列を置換するため、
+# 配列ではなく辞書で宣言する。取引先名を含むキーは公開側には書かない。
 #
-# name          プロファイル名
+# <キー>        辞書のキーがプロファイル名
 # configDir     $HOME からの相対パス
 # explicitEnv   false のとき CLAUDE_CONFIG_DIR を設定せずに CLI を呼ぶ。
 #               personal は既定値で動く。true にすると .claude.json が二重になる。
 # excludeSkills 配布から除外するスキル名
+# model / theme 設定するときだけ書く（settings.json の同名キーになる）
 # marketplaces  kind は builtin か github
 # plugins       id と enabled
 # mcp           name / transport / url または urlEnv / header（任意）
@@ -16,110 +19,106 @@
 #               参照する変数名を変えることで、トークンをディレクトリではなく
 #               プロファイルに従わせる（personal: CONTEXT7_API_KEY、
 #               hucom-system: CONTEXT7_API_KEY_HUCOM_SYSTEM）。
+#
+# 各プロファイルは excludeSkills・marketplaces・plugins・mcp を必ず持つ
+# （テンプレートが直接 range するため）。
 
-[[claudeProfiles]]
-name = "personal"
+[claudeProfiles.personal]
 configDir = ".claude"
 explicitEnv = false
 excludeSkills = []
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.personal.marketplaces]]
   name = "claude-plugins-official"
   kind = "builtin"
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.personal.plugins]]
   id = "superpowers@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.personal.plugins]]
   id = "typescript-lsp@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.personal.plugins]]
   id = "plugin-dev@claude-plugins-official"
   enabled = false
-  [[claudeProfiles.mcp]]
+  [[claudeProfiles.personal.mcp]]
   name = "context7"
   transport = "http"
   url = "https://mcp.context7.com/mcp"
   header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}"
 
-[[claudeProfiles]]
-name = "hucom-system"
+[claudeProfiles.hucom-system]
 configDir = ".config/claude/hucom-system"
 explicitEnv = true
 # 法人 Max プランなので Fable 5 を既定モデルにする。personal は Pro のため指定しない
 # （Pro では Fable 5 がクレジット消費になるため、プランに応じた既定に任せる）。
 model = "claude-fable-5[1m]"
 excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.hucom-system.marketplaces]]
   name = "claude-plugins-official"
   kind = "builtin"
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.hucom-system.marketplaces]]
   name = "cloudflare"
   kind = "github"
   repo = "cloudflare/skills"
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.hucom-system.marketplaces]]
   name = "hucom-system"
   kind = "github"
   repo = "hucom-system/claude-plugins"
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom-system.plugins]]
   id = "superpowers@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom-system.plugins]]
   id = "typescript-lsp@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom-system.plugins]]
   id = "slack@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom-system.plugins]]
   id = "plugin-dev@claude-plugins-official"
   enabled = false
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom-system.plugins]]
   id = "cloudflare@cloudflare"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom-system.plugins]]
   id = "back-office@hucom-system"
   enabled = true
-  [[claudeProfiles.mcp]]
+  [[claudeProfiles.hucom-system.mcp]]
   name = "context7"
   transport = "http"
   url = "https://mcp.context7.com/mcp"
   header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY_HUCOM_SYSTEM}"
 
-[[claudeProfiles]]
-name = "hucom"
+[claudeProfiles.hucom]
 configDir = ".config/claude/hucom"
 explicitEnv = true
 excludeSkills = ["agents-sdk", "durable-objects", "wrangler"]
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.hucom.marketplaces]]
   name = "claude-plugins-official"
   kind = "builtin"
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.hucom.marketplaces]]
   name = "cloudflare"
   kind = "github"
   repo = "cloudflare/skills"
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom.plugins]]
   id = "superpowers@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom.plugins]]
   id = "typescript-lsp@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.hucom.plugins]]
   id = "plugin-dev@claude-plugins-official"
   enabled = false
-  [[claudeProfiles.plugins]]
-  id = "cloudflare@cloudflare"
-  enabled = true
-  [[claudeProfiles.mcp]]
+  [[claudeProfiles.hucom.mcp]]
   name = "context7"
   transport = "http"
   url = "https://mcp.context7.com/mcp"
   # hucom 用のキーは未発行。発行後に CONTEXT7_API_KEY_HUCOM へ分ける。
   header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}"
-  [[claudeProfiles.mcp]]
+  [[claudeProfiles.hucom.mcp]]
   name = "mfc_ca_hucom"
   transport = "http"
   urlEnv = "MFC_CA_HUCOM_URL"
 
-[[claudeProfiles]]
-name = "client"
+[claudeProfiles.client]
 configDir = ".config/claude/client"
 explicitEnv = true
 # 取引先1社ごとにプロファイルを作る（1社目は client。増えたら別の中立名を足し、既存は改名しない）。
@@ -142,34 +141,34 @@ excludeSkills = [
   "gws-workflow-file-announce", "gws-workflow-meeting-prep",
   "gws-workflow-standup-report", "gws-workflow-weekly-digest",
 ]
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.client.marketplaces]]
   name = "claude-plugins-official"
   kind = "builtin"
   # AWS 公式マーケットプレイス。aws-core が skills 一式と aws-mcp（uvx 経由）を持つ
-  [[claudeProfiles.marketplaces]]
+  [[claudeProfiles.client.marketplaces]]
   name = "agent-toolkit-for-aws"
   kind = "github"
   repo = "aws/agent-toolkit-for-aws"
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.client.plugins]]
   id = "superpowers@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.client.plugins]]
   id = "typescript-lsp@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.client.plugins]]
   id = "slack@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.plugins]]
+  [[claudeProfiles.client.plugins]]
   id = "aws-core@agent-toolkit-for-aws"
   enabled = true
-  [[claudeProfiles.mcp]]
+  [[claudeProfiles.client.mcp]]
   name = "context7"
   transport = "http"
   url = "https://mcp.context7.com/mcp"
   # 取引先案件も自社業務の一部のため hucom-system のキーを共用する
   header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY_HUCOM_SYSTEM}"
   # AWS 公式のフルマネージドなリモート MCP。認証不要
-  [[claudeProfiles.mcp]]
+  [[claudeProfiles.client.mcp]]
   name = "aws-knowledge"
   transport = "http"
   url = "https://knowledge-mcp.global.api.aws"

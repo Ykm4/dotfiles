@@ -192,11 +192,15 @@ install_profile() {
   echo "[$name] 配置完了。退避: $backup"
 }
 
-{{ range .claudeProfiles }}
-preflight "{{ .name }}" "$HOME/{{ .configDir }}" "{{ if .explicitEnv }}yes{{ else }}no{{ end }}"
+{{- /* 公開の claudeProfiles と非公開の clientProfiles（client-dotfiles。無ければ空）を連結する */}}
+{{- $client := dict }}
+{{- if hasKey . "clientProfiles" }}{{ $client = .clientProfiles }}{{ end }}
+{{- $all := merge (dict) .claudeProfiles $client }}
+{{ range $name, $p := $all }}
+preflight "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
 {{ end }}
-{{ range .claudeProfiles }}
-install_profile "{{ .name }}" "$HOME/{{ .configDir }}" "{{ if .explicitEnv }}yes{{ else }}no{{ end }}"
+{{ range $name, $p := $all }}
+install_profile "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
 {{ end }}
 
 FINISHED=1
