@@ -43,7 +43,7 @@ for t in ${TARGETS[@]+"${TARGETS[@]}"}; do
   case "$KNOWN" in *" $t "*) ;; *) die "未知のプロファイル: $t（候補:$KNOWN）" ;; esac
 done
 
-for c in jq shasum pgrep lsof claude cmp; do
+for c in jq shasum lsof claude cmp; do
   command -v "$c" >/dev/null || die "$c が無い"
 done
 
@@ -72,9 +72,15 @@ on_exit() {
 trap on_exit EXIT
 
 # Claude が動いている間は絶対に実行しない。PID だけ出す（引数に秘密が含まれうるため）。
+# pgrep -f は使わない。cmux は claude を巨大な --settings インライン引数付きで起動し、
+# macOS の pgrep は引数領域が大きいプロセスの読み取りに失敗して黙ってスキップする
+# （実測。ps は同じプロセスを列挙できる）。照合は実行コマンド（argv[0]）だけに行う。
+# 引数全体を見ると、~/.config/claude などのパスを引数に持つ無関係なプロセスを
+# 誤検出する。chrome-native-host（Claude.app のブラウザ拡張ホスト）はパスが
+# 大文字 Claude のため一致しない。
 claude_stopped() {
   local running
-  running="$(pgrep -f '(^|/)claude([[:space:]]|$)' || true)"
+  running="$(ps -axo pid=,args= | awk '$2 ~ /(^|\/)claude$/ {print $1}' || true)"
   [ -z "$running" ] || die "Claude Code が動作中。すべて終了してから再実行する。PID: $(printf '%s' "$running" | tr '\n' ' ')"
 }
 if targeted; then
