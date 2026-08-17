@@ -7,10 +7,14 @@
 {{- $client := dict -}}
 {{- if hasKey .root "clientProfiles" }}{{ $client = .root.clientProfiles }}{{ end -}}
 {{- $p := get (merge (dict) .root.claudeProfiles $client) $name -}}
+{{- /* 全プロファイル共通の宣言（claudeProfilesCommon）をプロファイル個別の前に連結する。
+      marketplaces は name、plugins は id をキーに後勝ちのため、プロファイル側の再宣言が共通を上書きする。 */ -}}
+{{- $common := dict "marketplaces" (list) "plugins" (list) -}}
+{{- if hasKey .root "claudeProfilesCommon" }}{{ $common = mergeOverwrite $common .root.claudeProfilesCommon }}{{ end -}}
 {{- $markets := dict -}}
-{{- range $p.marketplaces }}{{ if eq .kind "github" }}{{ $_ := set $markets .name (dict "source" (dict "source" "github" "repo" .repo)) }}{{ end }}{{ end -}}
+{{- range concat $common.marketplaces $p.marketplaces }}{{ if eq .kind "github" }}{{ $_ := set $markets .name (dict "source" (dict "source" "github" "repo" .repo)) }}{{ end }}{{ end -}}
 {{- $plugins := dict -}}
-{{- range $p.plugins }}{{ $_ := set $plugins .id .enabled }}{{ end -}}
+{{- range concat $common.plugins $p.plugins }}{{ $_ := set $plugins .id .enabled }}{{ end -}}
 {{- $notify := "~/.config/claude/_shared/scripts/cmux-notify.sh" -}}
 {{- $base := includeTemplate "claude-settings-base.json" . | fromJson -}}
 {{- $overlay := dict

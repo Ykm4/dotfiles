@@ -21,24 +21,39 @@
 #               hucom-system: CONTEXT7_API_KEY_HUCOM_SYSTEM）。
 #
 # 各プロファイルは excludeSkills・marketplaces・plugins・mcp を必ず持つ
-# （テンプレートが直接 range するため）。
+# （テンプレートが直接 range するため。空にするときは = [] と書く）。
+#
+# claudeProfilesCommon は全プロファイル共通の宣言。settings.json 生成時に
+# 各プロファイルの宣言の前へ連結される。plugins は id、marketplaces は name を
+# キーに後勝ちのため、特定プロファイルだけ無効にしたいときは、そのプロファイルで
+# 同じ id を enabled = false で再宣言する。共通化の対象は marketplaces と
+# plugins のみ（mcp と excludeSkills は claude:restore / claude:sync-links が
+# プロファイル単位で読むため対象外）。公開ファイルのため取引先名を含む宣言は
+# ここに書かない。
+
+[[claudeProfilesCommon.marketplaces]]
+name = "claude-plugins-official"
+kind = "builtin"
+[[claudeProfilesCommon.marketplaces]]
+name = "diagram-design"
+kind = "github"
+repo = "cathrynlavery/diagram-design"
+[[claudeProfilesCommon.plugins]]
+id = "superpowers@claude-plugins-official"
+enabled = true
+[[claudeProfilesCommon.plugins]]
+id = "typescript-lsp@claude-plugins-official"
+enabled = true
+[[claudeProfilesCommon.plugins]]
+id = "diagram-design@diagram-design"
+enabled = true
 
 [claudeProfiles.personal]
 configDir = ".claude"
 explicitEnv = false
 excludeSkills = []
-  [[claudeProfiles.personal.marketplaces]]
-  name = "claude-plugins-official"
-  kind = "builtin"
-  [[claudeProfiles.personal.plugins]]
-  id = "superpowers@claude-plugins-official"
-  enabled = true
-  [[claudeProfiles.personal.plugins]]
-  id = "typescript-lsp@claude-plugins-official"
-  enabled = true
-  [[claudeProfiles.personal.plugins]]
-  id = "plugin-dev@claude-plugins-official"
-  enabled = false
+marketplaces = []
+plugins = []
   [[claudeProfiles.personal.mcp]]
   name = "context7"
   transport = "http"
@@ -54,9 +69,6 @@ model = "claude-fable-5[1m]"
 theme = "dark"
 excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   [[claudeProfiles.hucom-system.marketplaces]]
-  name = "claude-plugins-official"
-  kind = "builtin"
-  [[claudeProfiles.hucom-system.marketplaces]]
   name = "cloudflare"
   kind = "github"
   repo = "cloudflare/skills"
@@ -65,17 +77,8 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   kind = "github"
   repo = "hucom-system/claude-plugins"
   [[claudeProfiles.hucom-system.plugins]]
-  id = "superpowers@claude-plugins-official"
-  enabled = true
-  [[claudeProfiles.hucom-system.plugins]]
-  id = "typescript-lsp@claude-plugins-official"
-  enabled = true
-  [[claudeProfiles.hucom-system.plugins]]
   id = "slack@claude-plugins-official"
   enabled = true
-  [[claudeProfiles.hucom-system.plugins]]
-  id = "plugin-dev@claude-plugins-official"
-  enabled = false
   [[claudeProfiles.hucom-system.plugins]]
   id = "cloudflare@cloudflare"
   enabled = true
