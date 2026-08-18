@@ -30,7 +30,18 @@ exists() { [ -e "$1" ] || [ -L "$1" ]; }
 # 対象プロファイル配下を開いているプロセスが無いことだけを検査する。
 # explicitEnv=false のプロファイルは状態ファイル（~/.claude.json）がプロファイル外に
 # あり使用中を検査しきれないため、全体実行（引数なし）でのみ差し替える。
-TARGETS=("$@")
+# --check は検査モード（例: mise run claude:install-profiles -- --check）。
+# 生成元から staging を組み立てて配備先と比較するだけで、何も変更しない。
+# Claude 起動中でも実行でき、差分があれば非ゼロで終了する。
+CHECK=0
+CHECK_DIFFS=0
+TARGETS=()
+for a in "$@"; do
+  case "$a" in
+    --check) CHECK=1 ;;
+    *) TARGETS+=("$a") ;;
+  esac
+done
 targeted() { [ ${#TARGETS[@]} -gt 0 ]; }
 wanted() {
   targeted || return 0
@@ -83,7 +94,9 @@ claude_stopped() {
   running="$(ps -axo pid=,args= | awk '$2 ~ /(^|\/)claude$/ {print $1}' || true)"
   [ -z "$running" ] || die "Claude Code が動作中。すべて終了してから再実行する。PID: $(printf '%s' "$running" | tr '\n' ' ')"
 }
-if targeted; then
+if [ "$CHECK" = 1 ]; then
+  echo "検査モード: 比較のみで何も変更しない"
+elif targeted; then
   echo "対象を絞るため Claude の全終了チェックを省略する: ${TARGETS[*]}"
 else
   claude_stopped
@@ -145,13 +158,64 @@ preflight() {
     [ "$(stat -f '%u' "$dst")" = "$(id -u)" ] || die "$name: 所有者が現在のユーザーでない"
   fi
 
-  if targeted; then
+  if [ "$CHECK" != 1 ] && targeted; then
     [ "$explicit" = "yes" ] || die "$name: explicitEnv=false のプロファイルは全体実行（引数なし）でのみ差し替える"
     if [ -e "$dst" ]; then
       local open
       open="$(lsof -t +D "$dst" 2>/dev/null | sort -u || true)"
       [ -z "$open" ] || die "$name: 配下を開いているプロセスがある。PID: $(printf '%s' "$open" | tr '\n' ' ')"
     fi
+  fi
+}
+
+# --- 検査モード: install_profile と同じ手順で staging を組み立て、配備先と比較する ---
+check_profile() {
+  local name="$1" dst="$2"
+  local src="$SRC_ROOT/$name"
+  local work
+  work="$(mktemp -d "${TMPDIR:-/tmp}/claude-profile-check.XXXXXX")"
+
+  local base diffs=0
+  for base in "${ALLOWLIST[@]}"; do
+    exists "$src/$base" || continue
+    cp -RP "$src/$base" "$work/$base"
+  done
+  if [ -f "$OVERLAY_ROOT/$name.settings.json" ]; then
+    jq -s '.[0] * .[1]' "$work/settings.json" "$OVERLAY_ROOT/$name.settings.json" >"$work/settings.json.merged"
+    /bin/mv "$work/settings.json.merged" "$work/settings.json"
+  fi
+
+  for base in "${ALLOWLIST[@]}"; do
+    exists "$work/$base" || continue
+    if ! exists "$dst/$base"; then
+      echo "[$name] 未配置: $base"
+      diffs=1
+      continue
+    fi
+    if [ "$base" = "settings.json" ]; then
+      # 生成元はキーがソート済みで配備先はそうとは限らないため、正規化して比較する。
+      # 配備先が JSON として壊れているときは正規化せずそのまま比較に回す。
+      jq -S . "$dst/$base" >"$work/.dst.normalized" 2>/dev/null || cp "$dst/$base" "$work/.dst.normalized"
+      jq -S . "$work/$base" >"$work/.new.normalized"
+      if ! cmp -s "$work/.dst.normalized" "$work/.new.normalized"; then
+        echo "[$name] 差分あり: ${base}（左が配備先、右が生成元。キー順は正規化済み）"
+        diff -u "$work/.dst.normalized" "$work/.new.normalized" | sed -n '1,40p' || true
+        diffs=1
+      fi
+      continue
+    fi
+    if ! diff -rq "$dst/$base" "$work/$base" >/dev/null 2>&1; then
+      echo "[$name] 差分あり: ${base}（左が配備先、右が生成元）"
+      diff -ru "$dst/$base" "$work/$base" | sed -n '1,40p' || true
+      diffs=1
+    fi
+  done
+
+  /bin/rm -rf "$work"
+  if [ "$diffs" = 0 ]; then
+    echo "[$name] 差分なし"
+  else
+    CHECK_DIFFS=1
   fi
 }
 
@@ -241,9 +305,18 @@ fi
 {{ end }}
 {{ range $name, $p := $all }}
 if wanted "{{ $name }}"; then
-  install_profile "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
+  if [ "$CHECK" = 1 ]; then
+    check_profile "{{ $name }}" "$HOME/{{ $p.configDir }}"
+  else
+    install_profile "{{ $name }}" "$HOME/{{ $p.configDir }}" "{{ if $p.explicitEnv }}yes{{ else }}no{{ end }}"
+  fi
 fi
 {{ end }}
 
 FINISHED=1
-echo "すべて完了した。退避は検証が済むまで削除しないこと。"
+if [ "$CHECK" = 1 ]; then
+  [ "$CHECK_DIFFS" = 0 ] || die "配備先と生成元に差分がある。直接編集していたら正本へ取り込み、正本更新の未配備なら再配備する"
+  echo "検査完了。配備先はすべて生成元と一致している。"
+else
+  echo "すべて完了した。退避は検証が済むまで削除しないこと。"
+fi
