@@ -78,4 +78,4 @@ env -u CLAUDE_CONFIG_DIR claude auth status           # personal の認証を確
 11. 各プロファイルで `/login` する
 12. `mise run claude:restore` を実行する
 13. 取引先向け local スコープのプラグインは宣言の外にある。
-    入れ直しの手順は `_private/CLAUDE-common.md` を参照する
+    入れ直しの手順は `_private/notes/new-machine.md` を参照する
