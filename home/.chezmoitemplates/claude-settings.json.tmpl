@@ -16,6 +16,8 @@
 {{- $plugins := dict -}}
 {{- range concat $common.plugins $p.plugins }}{{ $_ := set $plugins .id .enabled }}{{ end -}}
 {{- $notify := "~/.config/claude/_shared/scripts/cmux-notify.sh" -}}
+{{- /* 配備先のプロファイル構成（生成物）への直接編集を拒否し、dotfiles の正本へ誘導する */ -}}
+{{- $denyGenerated := "~/.config/claude/_shared/scripts/deny-generated-config-edit.sh" -}}
 {{- $base := includeTemplate "claude-settings-base.json" . | fromJson -}}
 {{- $overlay := dict
       "permissions" (dict "additionalDirectories" (list
@@ -25,6 +27,7 @@
         "~/.agents/skills/"
         "~/.config/mise/"))
       "hooks" (dict
+        "PreToolUse" (list (dict "matcher" "Edit|Write|NotebookEdit" "hooks" (list (dict "type" "command" "command" $denyGenerated "timeout" 10))))
         "Stop" (list (dict "matcher" "" "hooks" (list (dict "type" "command" "command" $notify "timeout" 10))))
         "Notification" (list (dict "matcher" "permission_prompt" "hooks" (list (dict "type" "command" "command" $notify "timeout" 10)))))
       "statusLine" (dict "type" "command" "command" "bun run ~/.config/claude/_shared/statusline.ts" "padding" 2)
