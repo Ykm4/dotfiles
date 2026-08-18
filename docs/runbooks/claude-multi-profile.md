@@ -35,7 +35,7 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 取引先は1社ごとにプロファイルを増やす（1社目は `client`。増えたら別の中立名を足し、
 既存は改名しない）。取引先プロファイルの宣言は手順1の場所ではなく、client-dotfiles の
 `.chezmoidata` に `clientProfiles` として書く。公開側には取引先名を書かず、
-対象ディレクトリとの対応は非公開側（`_private/CLAUDE-common.md`）で解決する。
+対象ディレクトリとの対応は非公開側（`_private/notes/profile-mapping.md`）で解決する。
 
 ## 共通スキルの足し方
 
