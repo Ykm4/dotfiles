@@ -45,6 +45,11 @@ aube = "latest"
 # @see https://github.com/vercel-labs/agent-browser
 "npm:agent-browser" = "latest"
 
+# @see https://github.com/firecrawl/cli
+# AIエージェント向けのWeb検索・取得CLI。APIキーはプロファイル別（conf.d/private_secrets.toml.tmpl）で、
+# 各作業ツリーの [env] / .envrc が FIRECRAWL_API_KEY へ付け替える（gws / gcloud と同じディレクトリ追従）。
+"npm:firecrawl-cli" = "latest"
+
 # @see https://github.com/microsoft/playwright-cli
 "npm:@playwright/cli" = "latest"
 

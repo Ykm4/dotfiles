@@ -66,11 +66,11 @@ chezmoi apply                                                # [3] 再適用で�
 
 ## 1Password の Vault/item 構成（値は非掲載）
 
-chezmoiのテンプレートが参照するのは`dotfiles` Vaultのみである。
+chezmoiのテンプレートは、機構の値を`dotfiles` Vaultから、プロファイル別のcredentialを所有者別のVault（`ykum4`=personal・`client-*`=取引先・`hucomsystem`=自社）から参照する。
 
 - `dotfiles` Vault
   - item `identity` — gcloudのaccount・project（`hucom-system`・`personal`の各プロファイル分）、Finicky用の取引先識別子、取引先踏み台のSSH設定。Finicky用は`finicky-profile/domain/gcp-project-partner-*`、Slack導入時は`finicky-slack-subdomain/team-partner-*`も必須。SSH用は`ssh-vault-partner-*`・`ssh-item-partner-*-{dev,stg}`・`ssh-pubkey-partner-*-{dev,stg}`・`ssh-config-partner-*`の4系統
-  - item `mise-secrets` — miseのsecrets.tomlに注入する値（APIキー・取引先envパス）
+  - item `mise-secrets` — miseのsecrets.tomlに注入するdotfiles機構の値（取引先envパス）。プロファイル別のAPIキーはここに置かない
   - item `gws-client-secret` — Google Workspace APIのclient secret（`hucom-system`・`personal`の各プロファイル分）
   - item `git-signing` — コミット署名用SSH鍵（1PasswordのSSHエージェント経由でのみ使用し、秘密鍵はディスクに書き出さない）
-- そのほかのVault（個人用・自社用・取引先ごとのVault）は本リポジトリのテンプレートからは参照しない。
+- プロファイル別のcredentialは所有者別Vaultに「<サービス名> API Key <プロファイル>」形式のAPI Credential項目（フィールド`credential`）で置き、miseのsecrets.tomlが参照する。

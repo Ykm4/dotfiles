@@ -4,3 +4,6 @@
 CLAUDE_CONFIG_DIR = "{{ env.HOME }}/.config/claude/hucom-system"
 GOOGLE_WORKSPACE_CLI_CONFIG_DIR = "{{ env.HOME }}/.config/gws/hucom-system"
 CLOUDSDK_ACTIVE_CONFIG_NAME = "hucom-system"
+# firecrawl CLI も hucom-system アカウントのキーへ向ける（~/work/hucom-system/mise.toml と同じ扱い）。
+# get_env はプロセス環境しか見えないため、secrets を合流済みの env マップ経由で読む。
+FIRECRAWL_API_KEY = "{{ env.FIRECRAWL_API_KEY_HUCOM_SYSTEM | default(value='') }}"

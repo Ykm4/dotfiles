@@ -59,6 +59,11 @@ plugins = []
   transport = "http"
   url = "https://mcp.context7.com/mcp"
   header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}"
+  [[claudeProfiles.personal.mcp]]
+  name = "firecrawl"
+  transport = "http"
+  url = "https://mcp.firecrawl.dev/v2/mcp"
+  header = "Authorization: Bearer ${FIRECRAWL_API_KEY}"
 
 [claudeProfiles.hucom-system]
 configDir = ".config/claude/hucom-system"
@@ -87,4 +92,9 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   transport = "http"
   url = "https://mcp.context7.com/mcp"
   header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY_HUCOM_SYSTEM}"
+  [[claudeProfiles.hucom-system.mcp]]
+  name = "firecrawl"
+  transport = "http"
+  url = "https://mcp.firecrawl.dev/v2/mcp"
+  header = "Authorization: Bearer ${FIRECRAWL_API_KEY_HUCOM_SYSTEM}"
 
