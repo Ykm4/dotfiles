@@ -82,9 +82,6 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   [[claudeProfiles.hucom-system.plugins]]
   id = "cloudflare@cloudflare"
   enabled = true
-  [[claudeProfiles.hucom-system.plugins]]
-  id = "back-office@hucom-system"
-  enabled = true
   [[claudeProfiles.hucom-system.mcp]]
   name = "context7"
   transport = "http"
