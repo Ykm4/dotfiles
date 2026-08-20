@@ -1,0 +1,7 @@
+# mermaid CLI（mmdc）のラッパー。
+# aubeがpuppeteerのpostinstall（Chromiumダウンロード）をブロックするため、
+# ~/.config/mermaid/puppeteer.json でシステムのChromeを指定して描画する。
+[tasks.mermaid]
+description = "mermaid CLIで図を生成する。例: mise r mermaid -- --iconPacks @iconify-json/logos -i in.mmd -o out.svg"
+dir = "{{cwd}}"
+run = "mmdc -p {{env.HOME}}/.config/mermaid/puppeteer.json"

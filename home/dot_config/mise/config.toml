@@ -42,6 +42,17 @@ aube = "latest"
 # @see https://github.com/honojs/cli/blob/main/README.md#installation
 "npm:@hono/cli" = "latest"
 
+# @see https://github.com/mermaid-js/mermaid-cli
+# 図の生成に使う（design docのスタック構成図など）。puppeteerのChromiumダウンロード
+# （postinstall）はaubeがブロックするため、実行時は ~/.config/mermaid/puppeteer.json で
+# システムのChromeを指す。ラッパータスクは conf.d/mermaid.toml の mise r mermaid。
+# trust例外: cytoscape@3.34.1 はリードメンテナー本人の手動公開（GitHubリリース v3.34.1 と
+# 公開者・日時が一致、tarballサイズも連続）を2026-08-20に検証済み。provenanceなしのため
+# aubeのno-downgrade判定に掛かるが良性。次版がCI公開に戻れば例外は不要になる。
+"npm:@mermaid-js/mermaid-cli" = { version = "latest", trust_policy_excludes = [
+  "cytoscape@3.34.1",
+] }
+
 # @see https://github.com/vercel-labs/agent-browser
 "npm:agent-browser" = "latest"
 
