@@ -137,6 +137,7 @@
     "defaultMode": "auto"
   },
   "language": "Japanese",
+  "outputStyle": "Concise",
   "alwaysThinkingEnabled": true,
   "effortLevel": "xhigh",
   "awaySummaryEnabled": true,
