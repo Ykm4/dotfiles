@@ -2,3 +2,6 @@
 .config/claude/_shared/skills/*/node_modules
 .config/claude/_shared/skills/*/node_modules/**
 .config/claude/_shared/skills/*/bun.lock
+
+# Finder のメタデータはソースに紛れ込んでも配備しない
+**/.DS_Store
