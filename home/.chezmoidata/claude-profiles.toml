@@ -11,7 +11,7 @@
 #               personal は既定値で動く。true にすると .claude.json が二重になる。
 # excludeSkills 配布から除外するスキル名
 # model / theme 設定するときだけ書く（settings.json の同名キーになる）
-# marketplaces  kind は builtin か github
+# marketplaces  kind は builtin か github。任意で autoUpdate（settings.json の同名キーになる）
 # plugins       id と enabled
 # mcp           name / transport / url または urlEnv / header（任意）
 #               社内エンドポイントは urlEnv に環境変数名だけを書き、値は書かない。

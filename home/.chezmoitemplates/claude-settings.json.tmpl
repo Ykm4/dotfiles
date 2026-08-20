@@ -12,7 +12,8 @@
 {{- $common := dict "marketplaces" (list) "plugins" (list) -}}
 {{- if hasKey .root "claudeProfilesCommon" }}{{ $common = mergeOverwrite $common .root.claudeProfilesCommon }}{{ end -}}
 {{- $markets := dict -}}
-{{- range concat $common.marketplaces $p.marketplaces }}{{ if eq .kind "github" }}{{ $_ := set $markets .name (dict "source" (dict "source" "github" "repo" .repo)) }}{{ end }}{{ end -}}
+{{- /* autoUpdate は宣言にあるときだけ設定する（settings.json の extraKnownMarketplaces.<name>.autoUpdate になる） */ -}}
+{{- range concat $common.marketplaces $p.marketplaces }}{{ if eq .kind "github" }}{{ $m := dict "source" (dict "source" "github" "repo" .repo) }}{{ if hasKey . "autoUpdate" }}{{ $_ := set $m "autoUpdate" .autoUpdate }}{{ end }}{{ $_ := set $markets .name $m }}{{ end }}{{ end -}}
 {{- $plugins := dict -}}
 {{- range concat $common.plugins $p.plugins }}{{ $_ := set $plugins .id .enabled }}{{ end -}}
 {{- $notify := "~/.config/claude/_shared/scripts/cmux-notify.sh" -}}
