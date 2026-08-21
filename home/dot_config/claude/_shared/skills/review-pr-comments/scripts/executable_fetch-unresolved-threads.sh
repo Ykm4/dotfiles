@@ -2,7 +2,10 @@
 # 未解決の inline review thread を取得して JSON 配列で返す。
 #
 # Usage: fetch-unresolved-threads.sh <owner> <name> <pr_number>
-# Output: jq array of { id, isOutdated, path, comments: {...} }
+# Output: jq array of { kind, id, isOutdated, path, comments: {...} }
+#
+# id は thread の node ID。fetch-suppressed-comments.sh が返す review の node ID とは
+# 別物なので、取り違えを防ぐため kind を付けて返す。
 #
 # reviewThreads は first:100・thread ごとの comments は first:20 が取得上限。
 # 上限を超えた分がある場合は WARNING を stderr に出す（stdout の JSON 形式は変えない）。
@@ -67,4 +70,4 @@ jq -r '
 ' <<<"$resp" >&2
 
 jq '.data.repository.pullRequest.reviewThreads.nodes
-    | map(select(.isResolved == false))' <<<"$resp"
+    | map(select(.isResolved == false) | { kind: "thread" } + .)' <<<"$resp"

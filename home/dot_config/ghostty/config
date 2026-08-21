@@ -14,7 +14,7 @@ font-family-bold = "Monaspace Neon"
 font-family-bold = "Hiragino Kaku Gothic ProN"
 font-family-italic = "Monaspace Neon"
 font-family-italic = "Hiragino Kaku Gothic ProN"
-font-size = 12
+font-size = 13
 # 日本語表示の問題を避けるため無効化
 font-thicken = true
 
