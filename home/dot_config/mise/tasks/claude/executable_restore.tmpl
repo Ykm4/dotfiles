@@ -35,6 +35,24 @@ if [ ! -d "$DIR" ]; then
 else
 {{- range $p.mcp }}
   MCP_URL="{{ if hasKey . "urlEnv" }}${{ "{" }}{{ .urlEnv }}:-{{ "}" }}{{ else }}{{ .url }}{{ end }}"
+{{- if hasKey . "oauth" }}
+{{- /* 事前登録 OAuth（DCR 非対応サーバ向け）。client_id/secret は環境変数で受け、secret は claude が keychain に保存する。認証自体は対話ターミナルでの claude mcp login が要る。 */}}
+  MCP_CLIENT_ID="${{ "{" }}{{ .oauth.clientIdEnv }}:-{{ "}" }}"
+  MCP_SECRET="${{ "{" }}{{ .oauth.clientSecretEnv }}:-{{ "}" }}"
+  if [ -z "$MCP_URL" ] || [ -z "$MCP_CLIENT_ID" ] || [ -z "$MCP_SECRET" ]; then
+    echo "  mcp skipped（URL または OAuth の環境変数が未設定）: {{ .name }}" >&2; rc=1
+  elif run_claude "$EXPLICIT" "$DIR" mcp get "{{ .name }}" >/dev/null 2>&1; then
+    echo "  mcp ok: {{ .name }}"
+  else
+    MCP_CLIENT_SECRET="$MCP_SECRET" run_claude "$EXPLICIT" "$DIR" mcp add-json --scope user "{{ .name }}" \
+      "$(jq -cn --arg url "$MCP_URL" --arg cid "$MCP_CLIENT_ID" \
+          '{type:"{{ .transport }}",url:$url,oauth:{clientId:$cid,callbackPort:{{ .oauth.callbackPort }},scopes:"{{ .oauth.scopes }}"}}')" \
+      --client-secret \
+      && echo "  mcp added: {{ .name }}（認証は対話ターミナルで claude mcp login {{ .name }} を実行する）" \
+      || { echo "  mcp failed: {{ .name }}" >&2; rc=1; }
+  fi
+  unset MCP_SECRET
+{{- else }}
   if [ -z "$MCP_URL" ]; then
     echo "  mcp skipped（URL の環境変数が未設定）: {{ .name }}" >&2; rc=1
   elif run_claude "$EXPLICIT" "$DIR" mcp get "{{ .name }}" >/dev/null 2>&1; then
@@ -45,6 +63,7 @@ else
       && echo "  mcp added: {{ .name }}" \
       || { echo "  mcp failed: {{ .name }}" >&2; rc=1; }
   fi
+{{- end }}
 {{- end }}
 fi
 {{ end }}
