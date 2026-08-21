@@ -1,0 +1,24 @@
+# gws auth login --scopes に渡す全量リスト。google:auth が ~/.config/gws/<profile>/scopes を読む。
+# gws は --scopes を指定内容で置換するため、追加するときはここに足して mise run google:auth <profile> を再実行する。
+# scopes を置かないプロファイル（personal など）は gws の既定（対話選択）で入る。
+# pubsub・cloud-platform は Google が restricted 扱いにするスコープで、Workspace の内部アプリ（hucomsystem-gws）だから通る。
+[gwsScopes]
+full = [
+  "openid",
+  "email",
+  "profile",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/cloud-platform",
+  "https://www.googleapis.com/auth/contacts",
+  "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.settings.basic",
+  "https://www.googleapis.com/auth/gmail.settings.sharing",
+  "https://www.googleapis.com/auth/presentations",
+  "https://www.googleapis.com/auth/pubsub",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/tasks",
+]

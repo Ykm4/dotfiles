@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-#MISE description="Google の認証をやり直す（ブラウザが開く。gws と gcloud に共通の唯一の入口）"
-# 資格情報の正本を gws のプロファイル（~/.config/gws/<profile>/credentials.enc）へ一本化している。
-# gcloud 側は google:gcloud が都度アクセストークンを受け取るので、gcloud auth login は使わない。
-# 入口を1つにしておかないと、gws と gcloud で別々に期限が切れて再ログインが二重になる。
+#MISE description="gws の認証をやり直す（ブラウザが開く。プロファイルに scopes があれば全量指定で付与する）"
+# 資格情報の正本は gws のプロファイル（~/.config/gws/<profile>/credentials.enc）。
+# スコープは ~/.config/gws/<profile>/scopes（1行1スコープ。dotfiles の .chezmoidata/gws-scopes.toml から生成）を
+# --scopes で全量渡す。gws auth login は指定内容でスコープを置換するため、追加するときもファイルに足して再実行する。
+# scopes が無いプロファイル（personal など）は gws の既定（対話選択）で入る。
+# gcloud は Claude Code の google-cloud-cli MCP（Cloud CLI リモート MCP。サーバ側で実行）を通す。ローカル gcloud を直接使うときだけ gcloud auth login が要る。
 #
 # 使い方: mise run google:auth [profile]
 #   例: mise run google:auth personal
@@ -17,8 +19,30 @@ if [ ! -d "${cfg}" ]; then
   exit 1
 fi
 
-printf 'gws の認証を開始する (profile=%s)。ブラウザが開く。\n\n' "${profile}"
-GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${cfg}" gws auth login
+scopes_file="${cfg}/scopes"
+login_args=()
+expected=0
+if [ -f "${scopes_file}" ]; then
+  scopes_csv=$(grep -Ev '^[[:space:]]*(#|$)' "${scopes_file}" | paste -sd, -)
+  expected=$(grep -Ev '^[[:space:]]*(#|$)' "${scopes_file}" | wc -l | tr -d ' ')
+  login_args=(--scopes "${scopes_csv}")
+  printf 'gws の認証を開始する (profile=%s, scopes=%s 個)。ブラウザが開く。\n\n' "${profile}" "${expected}"
+else
+  printf 'gws の認証を開始する (profile=%s, scopes=既定)。ブラウザが開く。\n\n' "${profile}"
+fi
+
+# bash 3.2 でも set -u で空配列を展開できる書き方
+GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${cfg}" gws auth login ${login_args[@]+"${login_args[@]}"}
+
+# 古いアクセストークンを破棄する（残すと status は正常でも API 呼び出しが 403 になる）
+rm -f "${cfg}/token_cache.json"
 
 printf '\n完了した。\n'
-printf 'gcloud を使うときは mise run google:gcloud %s <引数> を通す（gcloud auth login は不要）。\n' "${profile}"
+if [ "${expected}" -gt 0 ]; then
+  granted=$(GOOGLE_WORKSPACE_CLI_CONFIG_DIR="${cfg}" gws auth status 2>/dev/null | sed -n '/^{/,$p' | jq -r '.scope_count // 0' 2>/dev/null || echo 0)
+  if [ "${granted}" -lt "${expected}" ]; then
+    printf '警告: 付与スコープが %s 個で、期待 %s 個より少ない。同意画面で一部を外していないか確認する。\n' "${granted}" "${expected}" >&2
+    exit 1
+  fi
+  printf '付与スコープ: %s 個（期待 %s 個以上）。\n' "${granted}" "${expected}"
+fi

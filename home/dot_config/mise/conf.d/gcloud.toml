@@ -2,8 +2,9 @@
 # Google Cloud CLI Tasks
 # ============================================================
 #
-# 認証まわりは ~/.config/mise/tasks/google/ のファイルタスク（google:auth / google:status /
-# google:gcloud）が担う。こちらは Google Cloud CLI 自体の更新と状態表示に限る。
+# 認証まわりは ~/.config/mise/tasks/google/ のファイルタスク（google:auth / google:status）が担う。
+# gcloud の実行は Claude Code の google-cloud-cli MCP（Cloud CLI リモート MCP）へ寄せ、ローカル gcloud はその補助に限る。
+# こちらは Google Cloud CLI 自体の更新と状態表示に限る。
 #
 # 実体は Homebrew ではなく Google 公式の versioned archive から導入する。
 # 導入は .chezmoiscripts/run_after_90-gcloud-install.sh、所在は .zshenv の GCLOUD_SDK_ROOT。

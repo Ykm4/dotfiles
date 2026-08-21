@@ -22,7 +22,7 @@ for cfg in "${HOME}"/.config/gws/*/; do
 done
 
 printf '\n=== gcloud（configuration の対応）===\n'
-# 所在の解決は google:gcloud と conf.d/gcloud.toml にそろえる。
+# 所在の解決は conf.d/gcloud.toml にそろえる。
 # 解決に失敗したときは「設定を読めない」ではなく、gcloud 自体が無いことを明示する。
 gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
 gcloud_cli="${gcloud_root}/bin/gcloud"
@@ -35,5 +35,5 @@ else
     || printf '  gcloud の設定を読めない\n'
 fi
 
-printf '\n注記: gcloud の資格情報は google:gcloud が都度渡すため、gcloud auth login の期限切れは無視してよい。\n'
+printf '\n注記: gcloud は Claude Code の google-cloud-cli MCP（サーバ側実行）を通すため、ローカル gcloud の期限切れは直接使うときだけ関係する。\n'
 printf '再認証が要るときは mise run google:auth <profile> を実行する。\n'
