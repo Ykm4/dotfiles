@@ -44,7 +44,7 @@ else
     printf '  %s\n    account: %s  project: %s\n' "${p}" "${acct:-未認証}" "${proj:-未設定}"
   done
   if [ -f "${HOME}/.config/gcloud/credentials.db" ]; then
-    printf '  （旧共有ストア ~/.config/gcloud 直下に資格情報が残っている。全プロファイルの移行後に gcloud auth revoke で整理する）\n'
+    printf '  （旧共有ストア ~/.config/gcloud 直下に資格情報が残っている。移行後はローカルから退避・削除する。gcloud auth revoke は同じクライアントの他の資格情報も無効にするので使わない）\n'
   fi
 fi
 
