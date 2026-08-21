@@ -1,0 +1,4 @@
+# gws auth login --scopes に渡す全量。dotfiles の .chezmoidata/gws-scopes.toml から生成するので手で編集しない。
+{{ range .gwsScopes.full -}}
+{{ . }}
+{{ end -}}
