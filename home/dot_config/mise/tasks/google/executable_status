@@ -31,14 +31,16 @@ if [ -z "${gcloud_cli}" ] || [ ! -x "${gcloud_cli}" ]; then
   printf '  gcloud CLI が見つからない（chezmoi apply で導入する）\n'
 else
   for cfg in "${HOME}"/.config/gws/*/; do
+    [ -f "${cfg}/credentials.enc" ] || continue   # gws の cache ディレクトリ等は対象外
     p=$(basename "${cfg}")
     gdir="${HOME}/.config/gcloud/${p}"
     if [ ! -d "${gdir}" ]; then
       printf '  %s\n    未作成（mise run google:gcloud-login %s で作る）\n' "${p}" "${p}"
       continue
     fi
-    acct=$(CLOUDSDK_CONFIG="${gdir}" "${gcloud_cli}" auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null || true)
-    proj=$(CLOUDSDK_CONFIG="${gdir}" "${gcloud_cli}" config get-value project 2>/dev/null || true)
+    # 環境の CLOUDSDK_ACTIVE_CONFIG_NAME（傘の mise が設定）は外し、ディレクトリ側の既定 configuration を見る
+    acct=$(env -u CLOUDSDK_ACTIVE_CONFIG_NAME CLOUDSDK_CONFIG="${gdir}" "${gcloud_cli}" auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null || true)
+    proj=$(env -u CLOUDSDK_ACTIVE_CONFIG_NAME CLOUDSDK_CONFIG="${gdir}" "${gcloud_cli}" config get-value project 2>/dev/null || true)
     printf '  %s\n    account: %s  project: %s\n' "${p}" "${acct:-未認証}" "${proj:-未設定}"
   done
   if [ -f "${HOME}/.config/gcloud/credentials.db" ]; then
