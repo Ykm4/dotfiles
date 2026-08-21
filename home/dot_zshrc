@@ -93,13 +93,18 @@ esac
 # gws multi-profile
 # ------------------------------------
 export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws/hucom-system"
+# gcloud も同じプロファイル名で設定ディレクトリを分ける（作業ディレクトリでは傘の mise.toml が上書きする）。
+export CLOUDSDK_CONFIG="$HOME/.config/gcloud/hucom-system"
+export CLOUDSDK_ACTIVE_CONFIG_NAME="hucom-system"
 gws-profile() {
   local profile="${1:-}"
   if [[ -z "$profile" ]]; then
     echo "gws profile: $(basename "$GOOGLE_WORKSPACE_CLI_CONFIG_DIR")"
   elif [[ -d "$HOME/.config/gws/$profile" ]]; then
     export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="$HOME/.config/gws/$profile"
-    echo "gws profile: $profile"
+    export CLOUDSDK_CONFIG="$HOME/.config/gcloud/$profile"
+    export CLOUDSDK_ACTIVE_CONFIG_NAME="$profile"
+    echo "gws/gcloud profile: $profile"
   else
     echo "Unknown profile: $profile (available: $(command ls "$HOME/.config/gws" 2>/dev/null | tr '\n' ' '))" >&2
     return 1

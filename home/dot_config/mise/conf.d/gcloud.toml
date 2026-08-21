@@ -2,7 +2,8 @@
 # Google Cloud CLI Tasks
 # ============================================================
 #
-# 認証まわりは ~/.config/mise/tasks/google/ のファイルタスク（google:auth / google:status）が担う。
+# 認証まわりは ~/.config/mise/tasks/google/ のファイルタスク（google:auth / google:gcloud-login / google:status）が担う。
+# gcloud の設定ディレクトリは CLOUDSDK_CONFIG でプロファイル別（~/.config/gcloud/<profile>）に分けている。
 # gcloud の実行は Claude Code の google-cloud-cli MCP（Cloud CLI リモート MCP）へ寄せ、ローカル gcloud はその補助に限る。
 # こちらは Google Cloud CLI 自体の更新と状態表示に限る。
 #

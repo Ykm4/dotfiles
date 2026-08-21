@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#MISE description="ローカル gcloud をプロファイル別の設定ディレクトリで認証する（ブラウザが開く）"
+# gcloud の設定ディレクトリは ~/.config/gcloud/<profile>（CLOUDSDK_CONFIG）で gws と同じ単位に分けている。
+# 資格情報・configuration・ADC がプロファイルごとに独立するので、別プロファイルでのログインが影響しない。
+# 初回は旧共有ストア（~/.config/gcloud 直下）に同名の configuration があれば account と project を引き継ぐ。
+# 普段の gcloud 実行は Claude Code の google-cloud-cli MCP を通し、ここでのログインは直接 gcloud を使うときだけ要る。
+#
+# 使い方: mise run google:gcloud-login [profile] [project]
+#   例: mise run google:gcloud-login hucom-system
+set -euo pipefail
+
+profile="${1:-hucom-system}"
+project_arg="${2:-}"
+cfg="${HOME}/.config/gcloud/${profile}"
+legacy="${HOME}/.config/gcloud"
+
+if [ ! -d "${HOME}/.config/gws/${profile}" ]; then
+  printf 'gws プロファイルが無い: %s（gcloud もプロファイル名を gws にそろえる）\n' "${profile}" >&2
+  printf '使えるプロファイル: %s\n' "$(command ls "${HOME}/.config/gws" 2>/dev/null | tr '\n' ' ')" >&2
+  exit 1
+fi
+mkdir -p "${cfg}"
+export CLOUDSDK_CONFIG="${cfg}"
+export CLOUDSDK_ACTIVE_CONFIG_NAME="${profile}"
+
+# 旧共有ストアの同名 configuration から account / project を引き継ぐ（無ければ空）
+account=""; project="${project_arg}"
+if [ -f "${legacy}/configurations/config_${profile}" ]; then
+  account=$(CLOUDSDK_CONFIG="${legacy}" gcloud config configurations describe "${profile}" --format='value(properties.core.account)' 2>/dev/null || true)
+  [ -n "${project}" ] || project=$(CLOUDSDK_CONFIG="${legacy}" gcloud config configurations describe "${profile}" --format='value(properties.core.project)' 2>/dev/null || true)
+fi
+
+if ! gcloud config configurations describe "${profile}" >/dev/null 2>&1; then
+  gcloud config configurations create "${profile}" --no-activate >/dev/null
+fi
+gcloud config configurations activate "${profile}" >/dev/null
+[ -z "${project}" ] || gcloud config set project "${project}" >/dev/null
+
+printf 'gcloud の認証を開始する (profile=%s, dir=%s, account=%s, project=%s)。ブラウザが開く。\n\n' \
+  "${profile}" "${cfg}" "${account:-未指定}" "${project:-未指定}"
+if [ -n "${account}" ]; then
+  gcloud auth login "${account}"
+else
+  gcloud auth login
+fi
+
+printf '\n完了した。\n'
+gcloud config list --format='value(core.account,core.project)' | tr '\t' ' ' | sed 's/^/  account project: /'
