@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // YouTube 動画やローカル動画を Gemini に映像込みで解析させる。
 // 字幕では拾えない情報（スライドの図表・コード・デモの操作手順）を読ませるための入口である。
-// YouTube URL は Gemini が YouTube 側から直接取得するので、ローカルへのダウンロードは要らない。
+// YouTube URL は Gemini が YouTube 側から直接取得するので、ローカルへのダウンロードは不要である。
 // 送信するのは公開 URL とプロンプトだけなので、プロンプトに社内固有の文脈を書かないこと。
 
 import {
@@ -13,12 +13,15 @@ import {
   type File as GenAiFile,
   type Part,
 } from "@google/genai";
+import { constants as fsConstants } from "node:fs";
+import { access, stat } from "node:fs/promises";
 
 const DEFAULT_MODEL = "gemini-3.7-flash";
 
-// アップロードした動画が処理を終えるまで待つ間隔と回数。積で待ち時間の上限になる。
+// アップロードした動画が処理を終えるまで待つ間隔と回数。API の応答時間は含まない。
 const POLL_INTERVAL_MS = 5_000;
 const POLL_MAX_ATTEMPTS = 60;
+const CLEANUP_TIMEOUT_MS = 10_000;
 
 const RESOLUTIONS: Record<string, MediaResolution> = {
   low: MediaResolution.MEDIA_RESOLUTION_LOW,
@@ -26,13 +29,13 @@ const RESOLUTIONS: Record<string, MediaResolution> = {
 };
 
 const ERROR_HINTS: Record<number, string> = {
-  429: "\n無料枠の上限に達した。1日20本を使い切ったか、長い動画で TPM 25万を超えた可能性がある。",
+  429: "\n利用上限に達した。無料枠では1日20回を使い切ったか、長い動画で TPM 25万を超えた可能性がある。",
   503: "\nモデルが混雑している。時間をおくか --model で別の Flash を指定する。",
 };
 
 const DEFAULT_PROMPT = `この動画の内容を日本語で要約してください。次の4点を必ず含めること。
 - 全体の要旨を3〜5文で述べる。
-- 主要な論点を時系列の箇条書きにし、各項目の先頭に MM:SS のタイムスタンプを付ける。
+- 主要な論点を時系列の箇条書きにし、各項目の先頭に MM:SS（1時間以上は HH:MM:SS）のタイムスタンプを付ける。
 - スライドや画面に図表・コード・数値が映る場合は、そこに書かれている内容を文章で説明する。
 - 音声では語られない視覚情報（デモの操作手順、グラフの傾向、画面遷移）も拾う。
 視覚情報が乏しい動画では、その旨を一言添えたうえで音声の内容だけを要約すること。`;
@@ -50,7 +53,7 @@ interface Options {
 const USAGE = `使い方: video-summary <YouTube URL | 動画ファイル> [プロンプト] [オプション]
 
 オプション:
-  --fps <n>            映像のサンプリング間隔（既定は 1fps、範囲は 0 より大きく 24 以下）
+  --fps <n>            映像のサンプリング頻度（既定は毎秒1コマ、範囲は 0 より大きく 24 以下）
                        スライド中心の動画は 0.2 程度で足りる
   --resolution <v>     low（既定・約100トークン/秒）または default（約300トークン/秒）
   --model <id>         既定は ${DEFAULT_MODEL}。無料枠は Flash 系のみ
@@ -69,14 +72,21 @@ function parseArgs(argv: string[]): Options {
   const promptParts: string[] = [];
   let fps: number | undefined;
   let resolutionInput = "low";
-  let model = process.env["GEMINI_VIDEO_MODEL"] ?? DEFAULT_MODEL;
+  let model = process.env["GEMINI_VIDEO_MODEL"] || DEFAULT_MODEL;
   let vertex = process.env["GOOGLE_GENAI_USE_VERTEXAI"] === "true";
   let json = false;
 
   const next = (i: number, flag: string): string => {
     const value = argv[i + 1];
-    if (value === undefined) throw new UsageError(`${flag} に値が要る`);
+    if (value === undefined || value.startsWith("-")) {
+      throw new UsageError(`${flag} には値が必要である`);
+    }
     return value;
+  };
+
+  const addPositional = (value: string): void => {
+    if (target === "") target = value;
+    else promptParts.push(value);
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -99,6 +109,10 @@ function parseArgs(argv: string[]): Options {
         model = next(i, arg);
         i++;
         break;
+      case "--":
+        for (const value of argv.slice(i + 1)) addPositional(value);
+        i = argv.length;
+        break;
       case "--vertex":
         vertex = true;
         break;
@@ -110,13 +124,13 @@ function parseArgs(argv: string[]): Options {
         console.log(USAGE);
         process.exit(0);
       default:
-        if (arg.startsWith("--")) throw new UsageError(`不明なオプション: ${arg}`);
-        if (target === "") target = arg;
-        else promptParts.push(arg);
+        if (arg.startsWith("-")) throw new UsageError(`不明なオプション: ${arg}`);
+        addPositional(arg);
     }
   }
 
   if (target === "") throw new UsageError(USAGE);
+  if (model.trim() === "") throw new UsageError("--model には空でないモデル ID を指定する");
 
   const resolution = RESOLUTIONS[resolutionInput];
   if (resolution === undefined) {
@@ -125,7 +139,7 @@ function parseArgs(argv: string[]): Options {
 
   return {
     target,
-    prompt: promptParts.length > 0 ? promptParts.join(" ") : DEFAULT_PROMPT,
+    prompt: promptParts.join(" ").trim() || DEFAULT_PROMPT,
     fps,
     resolution,
     model,
@@ -137,7 +151,7 @@ function parseArgs(argv: string[]): Options {
 function createClient(options: Options): GoogleGenAI {
   if (options.vertex) {
     const project = process.env["GOOGLE_CLOUD_PROJECT"];
-    if (!project) throw new UsageError("--vertex には GOOGLE_CLOUD_PROJECT が要る");
+    if (!project) throw new UsageError("--vertex には GOOGLE_CLOUD_PROJECT が必要である");
     return new GoogleGenAI({
       vertexai: true,
       project,
@@ -177,52 +191,143 @@ async function waitUntilActive(ai: GoogleGenAI, uploaded: GenAiFile): Promise<Ge
     await Bun.sleep(POLL_INTERVAL_MS);
     file = await ai.files.get({ name });
   }
+  if (file.state === "ACTIVE") return file;
+  if (file.state === "FAILED") {
+    throw new Error(`動画の処理に失敗した: ${file.error?.message ?? "理由不明"}`);
+  }
   const limitMinutes = (POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 60_000;
-  throw new Error(`動画の処理が${limitMinutes}分以内に終わらなかった`);
+  throw new Error(`動画の処理が約${limitMinutes}分待っても終わらなかった`);
 }
 
-async function buildVideoPart(ai: GoogleGenAI, options: Options): Promise<Part> {
-  let part: Part;
+interface VideoInput {
+  part: Part;
+  uploadedFileName?: string;
+}
 
-  if (/^https?:\/\//.test(options.target)) {
-    // YouTube URL はアップロード不要で、Gemini が YouTube 側から直接取得する。
-    part = createPartFromUri(options.target, "video/mp4");
-  } else {
-    const source = Bun.file(options.target);
-    if (!(await source.exists())) throw new UsageError(`ファイルが見つからない: ${options.target}`);
+type VideoSource = { kind: "youtube" } | { kind: "local"; mimeType: string };
 
-    // MIME タイプの判定は Bun のテーブル（mime-db 準拠）に任せる。SDK 内蔵の推定より網羅的である。
-    const mimeType = source.type.split(";")[0] ?? "";
-    if (!mimeType.startsWith("video/")) {
-      throw new UsageError(`動画として扱えない形式である（${mimeType || "判定不能"}）: ${options.target}`);
-    }
+function isYouTubeUrl(target: string): boolean {
+  if (!/^https?:/i.test(target)) return false;
 
-    console.error(`アップロード中: ${options.target}`);
-    const uploaded = await ai.files.upload({ file: options.target, config: { mimeType } });
-    const active = await waitUntilActive(ai, uploaded);
-    if (!active.uri || !active.mimeType) throw new Error("アップロード結果に URI が無い");
-    part = createPartFromUri(active.uri, active.mimeType);
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    throw new UsageError(`URL の形式が正しくない: ${target}`);
   }
 
-  if (options.fps !== undefined) part.videoMetadata = { fps: options.fps };
-  return part;
+  const hostname = url.hostname.toLowerCase();
+  if (hostname !== "youtu.be" && hostname !== "youtube.com" && !hostname.endsWith(".youtube.com")) {
+    throw new UsageError(`YouTube 以外の URL は扱えない: ${target}`);
+  }
+  return true;
+}
+
+async function inspectLocalVideo(path: string): Promise<string> {
+  try {
+    const fileInfo = await stat(path);
+    if (!fileInfo.isFile()) throw new UsageError(`通常のファイルではない: ${path}`);
+    if (fileInfo.size === 0) throw new UsageError(`ファイルが空である: ${path}`);
+    await access(path, fsConstants.R_OK);
+  } catch (error) {
+    if (error instanceof UsageError) throw error;
+    throw new UsageError(`ファイルを読み取れない: ${path}（${formatError(error)}）`);
+  }
+
+  // MIME タイプの判定は Bun のテーブル（mime-db 準拠）に任せる。SDK 内蔵の推定より網羅的である。
+  const mimeType = Bun.file(path).type.split(";")[0] ?? "";
+  if (!mimeType.startsWith("video/")) {
+    throw new UsageError(`動画として扱えない形式である（${mimeType || "判定不能"}）: ${path}`);
+  }
+  return mimeType;
+}
+
+async function inspectVideoSource(options: Options): Promise<VideoSource> {
+  if (isYouTubeUrl(options.target)) return { kind: "youtube" };
+  if (options.vertex) {
+    throw new UsageError("Vertex AI ではローカルファイルを直接アップロードできない。YouTube URL を指定する");
+  }
+  return { kind: "local", mimeType: await inspectLocalVideo(options.target) };
+}
+
+async function deleteUploadedFile(ai: GoogleGenAI, name: string): Promise<void> {
+  try {
+    await ai.files.delete({
+      name,
+      config: {
+        httpOptions: {
+          timeout: CLEANUP_TIMEOUT_MS,
+          retryOptions: { attempts: 1 },
+        },
+      },
+    });
+  } catch (error) {
+    console.error(`警告: アップロード済みファイルを削除できなかった: ${formatError(error)}`);
+  }
+}
+
+async function uploadLocalVideo(
+  ai: GoogleGenAI,
+  path: string,
+  mimeType: string,
+): Promise<VideoInput> {
+  console.error(`アップロード中: ${path}`);
+  const uploaded = await ai.files.upload({ file: path, config: { mimeType } });
+  const uploadedFileName = uploaded.name;
+  if (!uploadedFileName) throw new Error("アップロード結果にファイル名が無い");
+
+  try {
+    const active = await waitUntilActive(ai, uploaded);
+    if (!active.uri || !active.mimeType) throw new Error("アップロード結果に URI が無い");
+    return { part: createPartFromUri(active.uri, active.mimeType), uploadedFileName };
+  } catch (error) {
+    await deleteUploadedFile(ai, uploadedFileName);
+    throw error;
+  }
+}
+
+async function buildVideoPart(
+  ai: GoogleGenAI,
+  options: Options,
+  source: VideoSource,
+): Promise<VideoInput> {
+  const input: VideoInput =
+    source.kind === "youtube"
+      ? // YouTube URL はアップロード不要で、Gemini が YouTube 側から直接取得する。
+        { part: createPartFromUri(options.target, "video/mp4") }
+      : await uploadLocalVideo(ai, options.target, source.mimeType);
+
+  if (options.fps !== undefined) input.part.videoMetadata = { fps: options.fps };
+  return input;
 }
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
+  const source = await inspectVideoSource(options);
   const ai = createClient(options);
-  const videoPart = await buildVideoPart(ai, options);
+  const { part: videoPart, uploadedFileName } = await buildVideoPart(ai, options, source);
 
-  const response = await ai.models.generateContent({
-    model: options.model,
-    contents: createUserContent([videoPart, options.prompt]),
-    config: { mediaResolution: options.resolution },
-  });
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: options.model,
+      contents: createUserContent([videoPart, options.prompt]),
+      config: { mediaResolution: options.resolution },
+    });
+  } finally {
+    if (uploadedFileName) await deleteUploadedFile(ai, uploadedFileName);
+  }
 
   const text = response.text;
   if (!text) {
-    const reason = response.candidates?.[0]?.finishReason ?? "理由不明";
-    throw new Error(`本文が空だった。安全フィルタで止まった可能性がある（finishReason: ${reason}）`);
+    const candidate = response.candidates?.[0];
+    const reason =
+      candidate?.finishMessage ??
+      candidate?.finishReason ??
+      response.promptFeedback?.blockReasonMessage ??
+      response.promptFeedback?.blockReason ??
+      "理由不明";
+    throw new Error(`本文が空だった。安全フィルタなどで止まった可能性がある（理由: ${reason}）`);
   }
 
   const usage = response.usageMetadata;
