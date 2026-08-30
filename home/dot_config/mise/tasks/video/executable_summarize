@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+#MISE description="YouTube 動画やローカル動画を Gemini に映像込みで解析させる（字幕ではなく映像を見る）"
+# 字幕の取得では拾えない情報（スライドの図表・コード・デモの操作手順）を読ませるためのタスクである。
+# YouTube URL は Gemini が YouTube 側から直接取得するので、ローカルへのダウンロードは要らない。
+# 送信するのは公開 URL とプロンプトだけなので、プロンプトに社内固有の文脈を書かないこと。
+# 認証は既定で Gemini API キー（GEMINI_API_KEY）。--vertex を付けると Vertex AI（ADC）へ切り替わる。
+set -uo pipefail
+
+MODEL="${GEMINI_VIDEO_MODEL:-gemini-3.7-flash}"
+FPS="${GEMINI_VIDEO_FPS:-}"
+RESOLUTION="${GEMINI_VIDEO_RESOLUTION:-low}"
+USE_VERTEX="${GOOGLE_GENAI_USE_VERTEXAI:-false}"
+LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
+RAW_JSON=0
+TARGET=""
+PROMPT=""
+
+DEFAULT_PROMPT='この動画の内容を日本語で要約してください。次の4点を必ず含めること。
+- 全体の要旨を3〜5文で述べる。
+- 主要な論点を時系列の箇条書きにし、各項目の先頭に MM:SS のタイムスタンプを付ける。
+- スライドや画面に図表・コード・数値が映る場合は、そこに書かれている内容を文章で説明する。
+- 音声では語られない視覚情報（デモの操作手順、グラフの傾向、画面遷移）も拾う。
+視覚情報が乏しい動画では、その旨を一言添えたうえで音声の内容だけを要約すること。'
+
+usage() {
+  cat <<'USAGE'
+使い方: mise run video:summarize <YouTube URL | 動画ファイル> [プロンプト] [オプション]
+
+オプション:
+  --fps <n>            映像のサンプリング間隔（既定は 1fps）。スライド中心の動画は 0.2 程度で足りる
+  --resolution <v>     low（既定・100トークン/秒）または default（300トークン/秒）
+  --model <id>         既定は gemini-3.7-flash。無料枠は Flash 系のみ
+  --vertex             Vertex AI（ADC 認証・GOOGLE_CLOUD_PROJECT 必須）へ切り替える
+  --json               API の生レスポンスをそのまま出力する
+  -h, --help           この使い方を表示する
+
+例:
+  mise run video:summarize 'https://www.youtube.com/watch?v=XXXX'
+  mise run video:summarize 'https://youtu.be/XXXX' '登場する図表だけを列挙して' --fps 0.2
+USAGE
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --fps) FPS="${2:-}"; shift 2 ;;
+    --resolution) RESOLUTION="${2:-}"; shift 2 ;;
+    --model) MODEL="${2:-}"; shift 2 ;;
+    --vertex) USE_VERTEX=true; shift ;;
+    --json) RAW_JSON=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --*) printf '不明なオプション: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+    *)
+      if [ -z "${TARGET}" ]; then TARGET="$1"; else PROMPT="${PROMPT}${PROMPT:+ }$1"; fi
+      shift ;;
+  esac
+done
+
+[ -n "${TARGET}" ] || { usage >&2; exit 2; }
+[ -n "${PROMPT}" ] || PROMPT="${DEFAULT_PROMPT}"
+
+case "${RESOLUTION}" in
+  low) MEDIA_RESOLUTION="MEDIA_RESOLUTION_LOW" ;;
+  default|medium) MEDIA_RESOLUTION="MEDIA_RESOLUTION_MEDIUM" ;;
+  *) printf '--resolution は low か default を指定する: %s\n' "${RESOLUTION}" >&2; exit 2 ;;
+esac
+
+# 動画パートの組み立て。YouTube URL は fileData でそのまま渡し、ローカルファイルは base64 で inlineData にする。
+# ローカルファイルは 15MB を超えると API 側で拒否されるため、超過時は先に知らせる。
+build_video_part() {
+  if [[ "${TARGET}" =~ ^https?:// ]]; then
+    jq -n --arg uri "${TARGET}" '{fileData: {fileUri: $uri, mimeType: "video/mp4"}}'
+    return
+  fi
+  if [ ! -f "${TARGET}" ]; then
+    printf 'ファイルが見つからない: %s\n' "${TARGET}" >&2
+    exit 1
+  fi
+  local size
+  size=$(wc -c < "${TARGET}" | tr -d ' ')
+  if [ "${size}" -gt 15728640 ]; then
+    printf 'ローカル動画は 15MB までしか渡せない（対象は %s バイト）。YouTube にアップロードするか、区間を切り出すこと。\n' "${size}" >&2
+    exit 1
+  fi
+  jq -n --arg data "$(base64 < "${TARGET}" | tr -d '\n')" \
+    '{inlineData: {mimeType: "video/mp4", data: $data}}'
+}
+
+VIDEO_PART=$(build_video_part) || exit 1
+
+# fps は videoMetadata に載せる。未指定なら既定（1fps）に任せる。
+if [ -n "${FPS}" ]; then
+  VIDEO_PART=$(printf '%s' "${VIDEO_PART}" | jq --argjson fps "${FPS}" '. + {videoMetadata: {fps: $fps}}')
+fi
+
+REQUEST=$(jq -n \
+  --argjson video "${VIDEO_PART}" \
+  --arg prompt "${PROMPT}" \
+  --arg resolution "${MEDIA_RESOLUTION}" \
+  '{
+     contents: [{role: "user", parts: [$video, {text: $prompt}]}],
+     generationConfig: {mediaResolution: $resolution}
+   }')
+
+if [ "${USE_VERTEX}" = "true" ]; then
+  PROJECT="${GOOGLE_CLOUD_PROJECT:-}"
+  if [ -z "${PROJECT}" ]; then
+    printf '--vertex には GOOGLE_CLOUD_PROJECT が要る。\n' >&2
+    exit 2
+  fi
+  TOKEN=$(gcloud auth print-access-token 2>/dev/null)
+  if [ -z "${TOKEN}" ]; then
+    printf 'ADC が無い。gcloud auth application-default login を実行すること。\n' >&2
+    exit 2
+  fi
+  ENDPOINT="https://aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent"
+  RESPONSE=$(curl -sS -X POST "${ENDPOINT}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H 'Content-Type: application/json; charset=utf-8' \
+    -d "${REQUEST}")
+else
+  if [ -z "${GEMINI_API_KEY:-}" ]; then
+    cat >&2 <<'NOKEY'
+GEMINI_API_KEY が設定されていない。
+
+無料枠のキーは https://aistudio.google.com/apikey で発行する。
+発行したキーは 1Password の hucomsystem Vault へ入れ、dotfiles の
+private_secrets.toml.tmpl から GEMINI_API_KEY_HUCOM_SYSTEM として供給する。
+Vertex AI を使う場合は --vertex を付けて GOOGLE_CLOUD_PROJECT を設定すること。
+NOKEY
+    exit 2
+  fi
+  ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
+  RESPONSE=$(curl -sS -X POST "${ENDPOINT}" \
+    -H "x-goog-api-key: ${GEMINI_API_KEY}" \
+    -H 'Content-Type: application/json; charset=utf-8' \
+    -d "${REQUEST}")
+fi
+
+if [ -z "${RESPONSE}" ]; then
+  printf 'API から応答が無かった。ネットワークを確認すること。\n' >&2
+  exit 1
+fi
+
+if [ "${RAW_JSON}" -eq 1 ]; then
+  printf '%s\n' "${RESPONSE}" | jq .
+  exit 0
+fi
+
+ERROR=$(printf '%s' "${RESPONSE}" | jq -r '.error.message // empty')
+if [ -n "${ERROR}" ]; then
+  printf 'API エラー: %s\n' "${ERROR}" >&2
+  printf '%s\n' "${RESPONSE}" | jq -r '.error | "  code: \(.code // "-")  status: \(.status // "-")"' >&2
+  exit 1
+fi
+
+TEXT=$(printf '%s' "${RESPONSE}" | jq -r '[.candidates[0].content.parts[]?.text // empty] | join("")')
+if [ -z "${TEXT}" ]; then
+  printf '本文が空だった。安全フィルタで止まった可能性がある。--json で生の応答を確認すること。\n' >&2
+  printf '%s\n' "${RESPONSE}" | jq -r '.candidates[0].finishReason // empty' >&2
+  exit 1
+fi
+
+printf '%s\n' "${TEXT}"
+
+# 消費トークンは stderr に出す。本文をパイプで受けても集計が混ざらないようにするためである。
+printf '%s' "${RESPONSE}" | jq -r '
+  .usageMetadata |
+  select(. != null) |
+  "\n--- 消費トークン: 入力 \(.promptTokenCount // 0) / 出力 \(.candidatesTokenCount // 0) / 合計 \(.totalTokenCount // 0) ---"' >&2
