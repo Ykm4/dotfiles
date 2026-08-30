@@ -48,3 +48,25 @@ export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 # .zshenv に置く理由: 対話シェルからもスクリプト（chezmoi apply のテンプレート注入など）からも op を使うため
 # 明示する理由: op は Homebrew cask、1Password アプリは自前の自動更新で独立に上がるため、明示しないとバージョンの組み合わせが変わるたびに再発しうる
 export OP_BIOMETRIC_UNLOCK_ENABLED=true
+
+{{- $client := dict }}
+{{- if hasKey . "clientSecretsLedger" }}{{ $client = .clientSecretsLedger }}{{ end }}
+{{- $ledger := merge (dict) .secretsLedger $client }}
+{{- $names := list }}
+{{- range $prof, $svcs := $ledger }}{{ range $svc, $s := $svcs }}{{ range $s.vars }}{{ $names = append $names .name }}{{ end }}{{ end }}{{ end }}
+{{- $names = concat $names (list "FIRECRAWL_API_KEY" "GEMINI_API_KEY") | uniq | sortAlpha }}
+
+# Claude Code のエージェントシェル無害化（2026-08-30 API キー露出インシデント対応）
+# Claude Code の Bash ツールが起動する zsh には CLAUDECODE=1 が継承される。
+# .zshenv は対話・非対話（zsh -c）を問わず読み込まれ、.zshrc の mise activate より先に評価される。
+# したがってこのガードが守るのは「claude 親プロセスから継承した変数」であり、
+# mise 設定に秘密が残っていれば後続の mise activate が再注入する（秘密台帳への一元化が前提）。
+# unset のリストは dotfiles の秘密台帳（secretsLedger + clientSecretsLedger）から生成される。
+# 注意: .zshenv.zwc が本ファイルより新しいとコンパイル済みが優先される。apply 後は .zwc を削除・再生成する。
+if [[ -n ${CLAUDECODE:-} ]]; then
+  # zsh の MULTIOS はパイプ併用時に `2>&1 >/dev/null` の stdout をパイプへ tee する（露出事故の直接原因）
+  setopt no_multios
+{{- range $names }}
+  unset {{ . }} 2>/dev/null
+{{- end }}
+fi

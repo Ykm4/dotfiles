@@ -3,6 +3,10 @@
 # 宣言は chezmoi の .chezmoidata/claude-profiles.toml。このファイルはそこから生成される。
 # 契約: 必要項目の存在を保証する。名前が一致すれば URL・ヘッダの差異は検出しない。
 # 満たせない項目は詳細を表示して非0で終わる。
+# 秘密の扱い（2026-08-30 API キー露出インシデント対応）:
+# - API キー型 MCP は headersHelper 付きで登録し、値はどこにも書かない（接続の瞬間に
+#   ~/.config/secrets/claude/<プロファイル>.env から生成される）。
+# - OAuth クライアントと urlEnv だけは登録時に env ファイルから読む（環境変数には依存しない）。
 set -euo pipefail
 
 [ $# -eq 0 ] || { echo "未知の引数: $*" >&2; exit 2; }
@@ -22,6 +26,15 @@ run_claude() {
   fi
 }
 
+# 秘密ファイル（生の KEY=VALUE）から1変数を読む。値は呼び出し元の変数にだけ入れ、表示しない。
+# 変数が無い・ファイルが不正なら空を返して常に成功する（set -euo pipefail の下でも
+# 呼び出し元の分岐に届くようにする。欠落の扱いは呼び出し元の空チェックが担う）。
+read_secret() {
+  [ -f "$1" ] && [ ! -L "$1" ] || return 0
+  [ "$(/usr/bin/stat -f '%Lp' "$1" 2>/dev/null)" = "600" ] || return 0
+  { grep -m1 "^$2=" "$1" || :; } | cut -d= -f2-
+}
+
 {{- /* 公開の claudeProfiles と非公開の clientProfiles（client-dotfiles。無ければ空）を連結する */}}
 {{- $client := dict }}
 {{- if hasKey . "clientProfiles" }}{{ $client = .clientProfiles }}{{ end }}
@@ -30,17 +43,18 @@ run_claude() {
 {{- $explicit := "no" }}{{ if $p.explicitEnv }}{{ $explicit = "yes" }}{{ end }}
 echo "=== {{ $name }} ==="
 NAME="{{ $name }}"; DIR="$HOME/{{ $p.configDir }}"; EXPLICIT="{{ $explicit }}"
+SECRETS_ENV="$HOME/.config/secrets/claude/{{ $name }}.env"
 if [ ! -d "$DIR" ]; then
   echo "  設定ディレクトリが無い: $DIR" >&2; rc=1
 else
 {{- range $p.mcp }}
-  MCP_URL="{{ if hasKey . "urlEnv" }}${{ "{" }}{{ .urlEnv }}:-{{ "}" }}{{ else }}{{ .url }}{{ end }}"
+  MCP_URL="{{ if hasKey . "urlEnv" }}$(read_secret "$SECRETS_ENV" "{{ .urlEnv }}"){{ else }}{{ .url }}{{ end }}"
 {{- if hasKey . "oauth" }}
-{{- /* 事前登録 OAuth（DCR 非対応サーバ向け）。client_id/secret は環境変数で受け、secret は claude が keychain に保存する。認証自体は対話ターミナルでの claude mcp login が要る。 */}}
-  MCP_CLIENT_ID="${{ "{" }}{{ .oauth.clientIdEnv }}:-{{ "}" }}"
-  MCP_SECRET="${{ "{" }}{{ .oauth.clientSecretEnv }}:-{{ "}" }}"
+{{- /* 事前登録 OAuth（DCR 非対応サーバ向け）。client_id/secret は env ファイルから読み、secret は claude が keychain に保存する。認証自体は対話ターミナルでの claude mcp login が要る。 */}}
+  MCP_CLIENT_ID="$(read_secret "$SECRETS_ENV" "{{ .oauth.clientIdEnv }}")"
+  MCP_SECRET="$(read_secret "$SECRETS_ENV" "{{ .oauth.clientSecretEnv }}")"
   if [ -z "$MCP_URL" ] || [ -z "$MCP_CLIENT_ID" ] || [ -z "$MCP_SECRET" ]; then
-    echo "  mcp skipped（URL または OAuth の環境変数が未設定）: {{ .name }}" >&2; rc=1
+    echo "  mcp skipped（URL または OAuth を $SECRETS_ENV から読めない）: {{ .name }}" >&2; rc=1
   elif run_claude "$EXPLICIT" "$DIR" mcp get "{{ .name }}" >/dev/null 2>&1; then
     echo "  mcp ok: {{ .name }}"
   else
@@ -52,14 +66,28 @@ else
       || { echo "  mcp failed: {{ .name }}" >&2; rc=1; }
   fi
   unset MCP_SECRET
+{{- else if hasKey . "secretService" }}
+  MCP_HELPER="$HOME/.config/secrets/claude/helpers/{{ $name }}-{{ .secretService }}.sh"
+  if [ -z "$MCP_URL" ]; then
+    echo "  mcp skipped（URL が未設定）: {{ .name }}" >&2; rc=1
+  elif [ ! -x "$MCP_HELPER" ]; then
+    echo "  mcp skipped（headersHelper が無い。chezmoi apply を先に実行する）: {{ .name }}" >&2; rc=1
+  elif run_claude "$EXPLICIT" "$DIR" mcp get "{{ .name }}" >/dev/null 2>&1; then
+    echo "  mcp ok: {{ .name }}"
+  else
+    run_claude "$EXPLICIT" "$DIR" mcp add-json --scope user "{{ .name }}" \
+      "$(jq -cn --arg url "$MCP_URL" --arg hh "$MCP_HELPER" \
+          '{type:"{{ .transport }}",url:$url,headersHelper:$hh}')" \
+      && echo "  mcp added: {{ .name }}" \
+      || { echo "  mcp failed: {{ .name }}" >&2; rc=1; }
+  fi
 {{- else }}
   if [ -z "$MCP_URL" ]; then
-    echo "  mcp skipped（URL の環境変数が未設定）: {{ .name }}" >&2; rc=1
+    echo "  mcp skipped（URL を $SECRETS_ENV から読めない）: {{ .name }}" >&2; rc=1
   elif run_claude "$EXPLICIT" "$DIR" mcp get "{{ .name }}" >/dev/null 2>&1; then
     echo "  mcp ok: {{ .name }}"
   else
     run_claude "$EXPLICIT" "$DIR" mcp add --scope user --transport {{ .transport }} "{{ .name }}" "$MCP_URL" \
-      {{ if hasKey . "header" }}--header '{{ .header }}'{{ end }} \
       && echo "  mcp added: {{ .name }}" \
       || { echo "  mcp failed: {{ .name }}" >&2; rc=1; }
   fi

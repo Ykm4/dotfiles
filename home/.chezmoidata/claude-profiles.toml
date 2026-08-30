@@ -13,16 +13,17 @@
 # model / theme 設定するときだけ書く（settings.json の同名キーになる）
 # marketplaces  kind は builtin か github。任意で autoUpdate（settings.json の同名キーになる）
 # plugins       id と enabled
-# mcp           name / transport / url または urlEnv / header（任意）/ oauth（任意）
+# mcp           name / transport / url または urlEnv / secretService（任意）/ oauth（任意）
+#               secretService は秘密台帳（secrets-ledger.toml）のサービス名。指定すると
+#               claude:restore が headersHelper（~/.config/secrets/claude/helpers/
+#               <プロファイル>-<サービス>.sh）付きで登録し、ヘッダは接続の瞬間に
+#               env ファイルから生成される。環境変数にもMCP設定にも値を置かない。
 #               oauth は DCR 非対応のリモート MCP（Google のリモート MCP など）向けの事前登録
-#               クライアント。clientIdEnv・clientSecretEnv（環境変数名）・callbackPort・scopes を書く。
-#               client_id も公開ファイルには書かず環境変数で渡す。認証は claude:restore では完結せず、
+#               クライアント。clientIdEnv・clientSecretEnv（台帳の変数名）・callbackPort・scopes を書く。
+#               claude:restore が登録時に env ファイルから読む。認証は claude:restore では完結せず、
 #               対話ターミナルで claude mcp login <name> を1回実行する。
-#               社内エンドポイントは urlEnv に環境変数名だけを書き、値は書かない。
-#               API キーはプロファイルごとに環境変数名を分ける。ヘッダ名は同じでも
-#               参照する変数名を変えることで、トークンをディレクトリではなく
-#               プロファイルに従わせる（personal: CONTEXT7_API_KEY、
-#               hucom-system: CONTEXT7_API_KEY_HUCOM_SYSTEM）。
+#               社内エンドポイントは urlEnv に台帳の変数名だけを書き、値は書かない
+#               （claude:restore が env ファイルから読む）。
 #
 # 各プロファイルは excludeSkills・marketplaces・plugins・mcp を必ず持つ
 # （テンプレートが直接 range するため。空にするときは = [] と書く）。
@@ -62,12 +63,12 @@ plugins = []
   name = "context7"
   transport = "http"
   url = "https://mcp.context7.com/mcp"
-  header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}"
+  secretService = "context7"
   [[claudeProfiles.personal.mcp]]
   name = "firecrawl"
   transport = "http"
   url = "https://mcp.firecrawl.dev/v2/mcp"
-  header = "Authorization: Bearer ${FIRECRAWL_API_KEY}"
+  secretService = "firecrawl"
 
 [claudeProfiles.hucom-system]
 configDir = ".config/claude/hucom-system"
@@ -97,17 +98,17 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   name = "context7"
   transport = "http"
   url = "https://mcp.context7.com/mcp"
-  header = "CONTEXT7_API_KEY: ${CONTEXT7_API_KEY_HUCOM_SYSTEM}"
+  secretService = "context7"
   [[claudeProfiles.hucom-system.mcp]]
   name = "firecrawl"
   transport = "http"
   url = "https://mcp.firecrawl.dev/v2/mcp"
-  header = "Authorization: Bearer ${FIRECRAWL_API_KEY_HUCOM_SYSTEM}"
+  secretService = "firecrawl"
   [[claudeProfiles.hucom-system.mcp]]
   name = "google-dev-knowledge"
   transport = "http"
   url = "https://developerknowledge.googleapis.com/mcp"
-  header = "X-Goog-Api-Key: ${GOOGLE_DEV_KNOWLEDGE_API_KEY_HUCOM_SYSTEM}"
+  secretService = "google-dev-knowledge"
   [[claudeProfiles.hucom-system.mcp]]
   # Google Cloud の Cloud CLI リモート MCP（gcloud/bq をサーバ側で実行。Preview）。
   # Claude Code 専用の Desktop 種別 OAuth クライアント（1Password「Google OAuth Client claude-mcp hucom-system」）を使う。gws とは分ける。

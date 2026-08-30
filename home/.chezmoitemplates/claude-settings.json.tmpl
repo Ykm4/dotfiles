@@ -19,6 +19,25 @@
 {{- $notify := "~/.config/claude/_shared/scripts/cmux-notify.sh" -}}
 {{- /* 配備先のプロファイル構成（生成物）への直接編集を拒否し、dotfiles の正本へ誘導する */ -}}
 {{- $denyGenerated := "~/.config/claude/_shared/scripts/deny-generated-config-edit.sh" -}}
+{{- /* 秘密台帳から sandbox.credentials の deny リストを生成する（2026-08-30 露出インシデント対応）。
+      enabled=false のまま配る: 手順[6]（漏れ経路の sentinel 検査後）で true へ切り替える。
+      credentials.files は OS サンドボックス（Seatbelt）で Bash とその子の読み取りを拒否し、
+      envVars は誤って親環境へ再導入された場合の保険として全秘密変数を unset する。 */ -}}
+{{- $clientLedger := dict -}}
+{{- if hasKey .root "clientSecretsLedger" }}{{ $clientLedger = .root.clientSecretsLedger }}{{ end -}}
+{{- $ledger := merge (dict) .root.secretsLedger $clientLedger -}}
+{{- $secretVars := list -}}
+{{- range $prof, $svcs := $ledger }}{{ range $svc, $s := $svcs }}{{ range $s.vars }}{{ $secretVars = append $secretVars .name }}{{ end }}{{ end }}{{ end -}}
+{{- $secretVars = concat $secretVars (list "FIRECRAWL_API_KEY" "GEMINI_API_KEY") | uniq | sortAlpha -}}
+{{- $sandboxEnvVars := list -}}
+{{- range $secretVars }}{{ $sandboxEnvVars = append $sandboxEnvVars (dict "name" . "mode" "deny") }}{{ end -}}
+{{- $sandbox := dict
+      "enabled" false
+      "failIfUnavailable" true
+      "credentials" (dict
+        "files" (list (dict "path" "~/.config/secrets" "mode" "deny"))
+        "envVars" $sandboxEnvVars)
+-}}
 {{- $base := includeTemplate "claude-settings-base.json" . | fromJson -}}
 {{- $overlay := dict
       "permissions" (dict "additionalDirectories" (list
@@ -34,6 +53,7 @@
       "statusLine" (dict "type" "command" "command" "bun run ~/.config/claude/_shared/statusline.ts" "padding" 2)
       "extraKnownMarketplaces" $markets
       "enabledPlugins" $plugins
+      "sandbox" $sandbox
 -}}
 {{- /* model と theme はプロファイル宣言にあるときだけ設定する。未指定なら既定に任せる。 */ -}}
 {{- if hasKey $p "model" }}{{ $_ := set $overlay "model" $p.model }}{{ end -}}

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#MISE description="YouTube 動画やローカル動画を Gemini に映像込みで解析させる（字幕ではなく映像を見る）"
+# 共通スキル video-summary の TypeScript 実装（公式 SDK @google/genai）を呼び出す。
+# 端末からもスキルからも同じ実装を呼ぶために、ここは薄いラッパーに留める。
+# 依存は初回と package.json・bun.lock の更新後に固定された lock から入れる。
+# node_modules は dotfiles に含めない。
+set -euo pipefail
+
+# 鍵を渡す実行対象は環境（HOME・PATH）に依存させず、chezmoi レンダリング時の絶対パスに固定する。
+# sandbox 有効化後は ~/.config/secrets の deny によりエージェントの Bash からは鍵を読めない（人間用タスク）。
+SKILL_DIR='{{ .chezmoi.homeDir }}/.config/claude/_shared/skills/video-summary'
+BUN_BIN='{{ .chezmoi.homeDir }}/.local/share/mise/installs/bun/latest/bin/bun'
+[ -x "${BUN_BIN}" ] || { printf '%s\n' "video:summarize: bun が見つからない: ${BUN_BIN}" >&2; exit 1; }
+PACKAGE_STAMP="${SKILL_DIR}/node_modules/.video-summary-package.json"
+LOCK_STAMP="${SKILL_DIR}/node_modules/.video-summary-bun.lock"
+
+if [ ! -f "${SKILL_DIR}/bun.lock" ]; then
+  printf '依存の固定ファイルが見つからない: %s\n' "${SKILL_DIR}/bun.lock" >&2
+  exit 1
+fi
+
+if [ ! -f "${SKILL_DIR}/node_modules/@google/genai/package.json" ] \
+  || [ ! -f "${PACKAGE_STAMP}" ] \
+  || [ ! -f "${LOCK_STAMP}" ] \
+  || ! cmp -s "${SKILL_DIR}/package.json" "${PACKAGE_STAMP}" \
+  || ! cmp -s "${SKILL_DIR}/bun.lock" "${LOCK_STAMP}"; then
+  printf '依存を導入・更新する: %s\n' "${SKILL_DIR}" >&2
+  (cd "${SKILL_DIR}" && "${BUN_BIN}" install --frozen-lockfile >&2)
+  cp "${SKILL_DIR}/package.json" "${PACKAGE_STAMP}"
+  cp "${SKILL_DIR}/bun.lock" "${LOCK_STAMP}"
+fi
+
+# GEMINI_API_KEY はシェル環境に常在させず、鍵ファイルから実行の瞬間だけ読む
+# （GEMINI_KEY_FILE / GEMINI_KEY_VAR は作業ツリーの mise [env] がパスと変数名だけを供給する）。
+# 組は台帳から生成した allowlist で固定し、呼出側が任意のファイル・変数へ差し替えることはできない。
+# 鍵ファイルの検査（0600・非シンボリックリンク・重複なし・非空・CR なし）に失敗したら読み込まない。
+# ファイルの供給が無い環境（personal 等）では、手動 export された GEMINI_API_KEY にだけ従う。
+if [ -n "${GEMINI_KEY_FILE:-}" ]; then
+  pair="${GEMINI_KEY_VAR:-GEMINI_API_KEY}|${GEMINI_KEY_FILE}"
+  case "$pair" in
+{{- $client := dict }}
+{{- if hasKey . "clientSecretsLedger" }}{{ $client = .clientSecretsLedger }}{{ end }}
+{{- $ledger := merge (dict) .secretsLedger $client }}
+{{- range $prof, $svcs := $ledger }}
+{{- if hasKey $svcs "gemini" }}
+{{- range (index $svcs "gemini").vars }}
+    '{{ .name }}|{{ $.chezmoi.homeDir }}/.config/secrets/claude/{{ $prof }}.env') ;;
+{{- end }}
+{{- end }}
+{{- end }}
+    *)
+      printf '%s\n' "video:summarize: 鍵ファイル/変数の組が allowlist に無い" >&2
+      exit 1
+      ;;
+  esac
+  f="${GEMINI_KEY_FILE}"; v="${GEMINI_KEY_VAR:-GEMINI_API_KEY}"
+  [ -f "$f" ] && [ ! -L "$f" ] || { printf '%s\n' "video:summarize: 鍵ファイルが無い" >&2; exit 1; }
+  [ "$(/usr/bin/stat -f '%Lp' "$f")" = "600" ] || { printf '%s\n' "video:summarize: 鍵ファイルは 0600 であること" >&2; exit 1; }
+  n="$(grep -c "^${v}=" "$f" || :)"
+  [ "$n" = "1" ] || { printf '%s\n' "video:summarize: 変数が未定義か重複している" >&2; exit 1; }
+  val="$({ grep -m1 "^${v}=" "$f" || :; } | cut -d= -f2-)"
+  [ -n "$val" ] || { printf '%s\n' "video:summarize: 変数が空" >&2; exit 1; }
+  case "$val" in *"$(printf '\r')"*) printf '%s\n' "video:summarize: 値に制御文字が含まれる" >&2; exit 1;; esac
+  GEMINI_API_KEY="$val"
+  export GEMINI_API_KEY
+  unset val
+fi
+
+exec "${BUN_BIN}" run "${SKILL_DIR}/scripts/summarize.ts" "$@"

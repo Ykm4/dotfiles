@@ -1,0 +1,127 @@
+{{- $client := dict -}}
+{{- if hasKey . "clientSecretsLedger" }}{{ $client = .clientSecretsLedger }}{{ end -}}
+{{- $ledger := merge (dict) .secretsLedger $client -}}
+#!/bin/sh
+# firecrawl CLI の鍵注入ラッパー（keywrap）。生成物: 編集しない。正本は dotfiles。
+# 秘密をシェル環境に常在させない設計（2026-08-30 API キー露出インシデント対応）のため、
+# 実行の瞬間だけ FIRECRAWL_KEY_FILE（生の KEY=VALUE・0600）から鍵を読み、実体へ exec する。
+# FIRECRAWL_KEY_FILE / FIRECRAWL_KEY_VAR は mise の各作業ツリー [env] が供給する
+# （パスと変数名だけで、値そのものではない）。組は台帳から生成した allowlist で固定し、
+# 呼出側が任意のファイル・変数へ差し替えることはできない。
+# 実バイナリと API 送信先も固定する（--api-url / FIRECRAWL_API_URL による
+# 鍵の横流しを拒否する）。PATH 上の優先は mise グローバル config の [env] _.path が保証する。
+
+umask 077
+
+secret_file="${FIRECRAWL_KEY_FILE:-}"
+var_name="${FIRECRAWL_KEY_VAR:-FIRECRAWL_API_KEY}"
+real_bin='{{ .chezmoi.homeDir }}/.local/share/mise/installs/npm-firecrawl-cli/latest/node_modules/.bin/firecrawl'
+
+fail() {
+    printf '%s\n' "firecrawl-keywrap: $1" >&2
+    exit 1
+}
+
+[ -n "$secret_file" ] ||
+    fail "FIRECRAWL_KEY_FILE is not set"
+
+# 鍵の送信先を差し替える引数を拒否する（Authorization ヘッダが指定 URL へ飛ぶため）。
+for arg in "$@"; do
+    case "$arg" in
+        --api-url|--api-url=*)
+            fail "--api-url is not allowed"
+            ;;
+    esac
+done
+
+# 変数とファイルの組は台帳から生成した allowlist に一致するものだけを許可する。
+pair="${var_name}|${secret_file}"
+case "$pair" in
+{{- range $prof, $svcs := $ledger }}
+{{- if hasKey $svcs "firecrawl" }}
+    '{{ (index $svcs "firecrawl").header.var }}|{{ $.chezmoi.homeDir }}/.config/secrets/claude/{{ $prof }}.env') ;;
+{{- end }}
+{{- end }}
+    *)
+        fail "key file/var pair is not in the allowlist"
+        ;;
+esac
+
+[ -f "$real_bin" ] && [ -x "$real_bin" ] ||
+    fail "real executable is unavailable: mise の npm:firecrawl-cli 導入先を確認する"
+
+# device/inode で自己再帰を防ぐ（シンボリックリンク経由も含む）。
+self_id=$(/usr/bin/stat -L -f '%d:%i' "$0" 2>/dev/null) ||
+    fail "cannot inspect wrapper executable"
+
+real_id=$(/usr/bin/stat -L -f '%d:%i' "$real_bin" 2>/dev/null) ||
+    fail "cannot inspect real executable"
+
+[ "$self_id" != "$real_id" ] ||
+    fail "real executable resolves to the wrapper"
+
+[ -f "$secret_file" ] ||
+    fail "secret file is unavailable"
+
+[ ! -L "$secret_file" ] ||
+    fail "secret file must not be a symbolic link"
+
+file_mode=$(/usr/bin/stat -f '%Lp' "$secret_file" 2>/dev/null) ||
+    fail "cannot inspect secret file"
+
+[ "$file_mode" = "600" ] ||
+    fail "secret file permissions must be 0600"
+
+found=0
+secret_value=
+
+while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+        '')
+            continue
+            ;;
+        \#*)
+            continue
+            ;;
+        *=*)
+            key=${line%%=*}
+            value=${line#*=}
+            ;;
+        *)
+            fail "secret file contains an invalid record"
+            ;;
+    esac
+
+    [ "$key" = "$var_name" ] ||
+        continue
+
+    found=$((found + 1))
+    [ "$found" -eq 1 ] ||
+        fail "variable is defined more than once"
+
+    secret_value=$value
+done < "$secret_file"
+
+[ "$found" -eq 1 ] ||
+    fail "variable is not defined"
+
+[ -n "$secret_value" ] ||
+    fail "variable is empty"
+
+carriage_return=$(printf '\r')
+case "$secret_value" in
+    *"$carriage_return"*)
+        fail "variable contains an invalid control character"
+        ;;
+esac
+
+FIRECRAWL_API_KEY=$secret_value
+export FIRECRAWL_API_KEY
+# 送信先を公式 API に固定する（保存済み設定や環境変数の custom URL を上書きする）。
+FIRECRAWL_API_URL='https://api.firecrawl.dev'
+export FIRECRAWL_API_URL
+
+unset secret_value value line
+exec "$real_bin" "$@"
+
+fail "failed to execute real executable"

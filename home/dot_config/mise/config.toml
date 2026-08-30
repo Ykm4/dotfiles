@@ -7,6 +7,19 @@
 # ============================================================
 # jobs は既定（4）のまま。npm backend の aube 化で signal 9 は解消済み（再び下げない）。
 
+# 秘密をシェル環境に常在させない設計（2026-08-30 API キー露出インシデント対応）。
+# keywrap: 鍵が要る CLI のラッパー置き場。_.path はツールパスより前に来るため、
+# mise 管理の実体（npm:firecrawl-cli 等）より先に解決される。
+# FIRECRAWL_KEY_FILE / FIRECRAWL_KEY_VAR は「鍵ファイルのパスと変数名」だけで値ではない。
+# 既定は personal で、各作業ツリーの mise.toml がプロファイルに応じて上書きする。
+[env]
+_.path = ["{{env.HOME}}/.local/libexec/keywrap"]
+FIRECRAWL_KEY_FILE = "{{env.HOME}}/.config/secrets/claude/personal.env"
+FIRECRAWL_KEY_VAR = "FIRECRAWL_API_KEY"
+# Claude Code のサブプロセス（Bash・hooks・stdio MCP）から Anthropic・クラウド系資格情報を
+# 除去する公式機能。第三者鍵は sandbox.credentials.envVars が主で、これは補助層。
+CLAUDE_CODE_SUBPROCESS_ENV_SCRUB = "1"
+
 # タスク定義から共有するパス。run と usage（complete 含む）の両方で {{vars.x}} として展開される。
 [vars]
 dbx = "{{env.HOME}}/.config/dbx/bin/dbx"
@@ -57,8 +70,9 @@ aube = "latest"
 "npm:agent-browser" = "latest"
 
 # @see https://github.com/firecrawl/cli
-# AIエージェント向けのWeb検索・取得CLI。APIキーはプロファイル別（conf.d/private_secrets.toml.tmpl）で、
-# 各作業ツリーの [env] / .envrc が FIRECRAWL_API_KEY へ付け替える（gws / gcloud と同じディレクトリ追従）。
+# AIエージェント向けのWeb検索・取得CLI。APIキーは環境変数に常在させず、
+# ~/.local/libexec/keywrap/firecrawl が実行の瞬間に鍵ファイルから読んで実体へ exec する
+# （プロファイル追従は各作業ツリーの FIRECRAWL_KEY_FILE / FIRECRAWL_KEY_VAR が担う）。
 "npm:firecrawl-cli" = "latest"
 
 # @see https://github.com/microsoft/playwright-cli
