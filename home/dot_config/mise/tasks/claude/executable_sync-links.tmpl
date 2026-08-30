@@ -44,7 +44,7 @@ replace_with_link() {
     return 0
   fi
   if [ -e "$target" ]; then
-    if diff -r -q --exclude=node_modules --exclude=bun.lock --exclude=.git --exclude=state "$target" "$source" >/dev/null 2>&1; then
+    if diff -r -q --exclude=node_modules --exclude=.git --exclude=state "$target" "$source" >/dev/null 2>&1; then
       mkdir -p "$BACKUP_ROOT/$profile/skills"
       mv "$target" "$BACKUP_ROOT/$profile/skills/$(basename "$target")"
     else

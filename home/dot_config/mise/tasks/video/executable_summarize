@@ -2,18 +2,28 @@
 #MISE description="YouTube 動画やローカル動画を Gemini に映像込みで解析させる（字幕ではなく映像を見る）"
 # 共通スキル video-summary の TypeScript 実装（公式 SDK @google/genai）を呼び出す。
 # 端末からもスキルからも同じ実装を呼ぶために、ここは薄いラッパーに留める。
-# 依存は初回と package.json の更新後に bun install で入れる。node_modules は dotfiles に含めない。
+# 依存は初回と package.json・bun.lock の更新後に固定された lock から入れる。
+# node_modules は dotfiles に含めない。
 set -euo pipefail
 
 SKILL_DIR="${HOME}/.config/claude/_shared/skills/video-summary"
 PACKAGE_STAMP="${SKILL_DIR}/node_modules/.video-summary-package.json"
+LOCK_STAMP="${SKILL_DIR}/node_modules/.video-summary-bun.lock"
+
+if [ ! -f "${SKILL_DIR}/bun.lock" ]; then
+  printf '依存の固定ファイルが見つからない: %s\n' "${SKILL_DIR}/bun.lock" >&2
+  exit 1
+fi
 
 if [ ! -f "${SKILL_DIR}/node_modules/@google/genai/package.json" ] \
   || [ ! -f "${PACKAGE_STAMP}" ] \
-  || ! cmp -s "${SKILL_DIR}/package.json" "${PACKAGE_STAMP}"; then
+  || [ ! -f "${LOCK_STAMP}" ] \
+  || ! cmp -s "${SKILL_DIR}/package.json" "${PACKAGE_STAMP}" \
+  || ! cmp -s "${SKILL_DIR}/bun.lock" "${LOCK_STAMP}"; then
   printf '依存を導入・更新する: %s\n' "${SKILL_DIR}" >&2
-  (cd "${SKILL_DIR}" && bun install)
+  (cd "${SKILL_DIR}" && bun install --frozen-lockfile >&2)
   cp "${SKILL_DIR}/package.json" "${PACKAGE_STAMP}"
+  cp "${SKILL_DIR}/bun.lock" "${LOCK_STAMP}"
 fi
 
 exec bun run "${SKILL_DIR}/scripts/summarize.ts" "$@"

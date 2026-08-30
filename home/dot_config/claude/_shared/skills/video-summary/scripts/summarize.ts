@@ -11,6 +11,7 @@ import {
   createPartFromUri,
   createUserContent,
   type File as GenAiFile,
+  type ModalityTokenCount,
   type Part,
 } from "@google/genai";
 import { constants as fsConstants } from "node:fs";
@@ -22,15 +23,24 @@ const DEFAULT_MODEL = "gemini-3.7-flash";
 const POLL_INTERVAL_MS = 5_000;
 const POLL_MAX_ATTEMPTS = 60;
 const CLEANUP_TIMEOUT_MS = 10_000;
+const GENERATE_TIMEOUT_MINUTES = 15;
+const GENERATE_TIMEOUT_MS = GENERATE_TIMEOUT_MINUTES * 60_000;
+
+const GENERATE_TIMEOUT_MESSAGE =
+  `動画の解析結果が${GENERATE_TIMEOUT_MINUTES}分以内に返らなかった。` +
+  "動画が長いか、モデルが混雑している可能性がある。" +
+  "--fps を下げるか、時間をおいて再実行する。";
 
 const RESOLUTIONS: Record<string, MediaResolution> = {
   low: MediaResolution.MEDIA_RESOLUTION_LOW,
-  default: MediaResolution.MEDIA_RESOLUTION_MEDIUM,
+  high: MediaResolution.MEDIA_RESOLUTION_HIGH,
 };
 
 const ERROR_HINTS: Record<number, string> = {
+  408: `\n${GENERATE_TIMEOUT_MESSAGE}`,
   429: "\n利用上限に達した。無料枠では1日20回を使い切ったか、長い動画で TPM 25万を超えた可能性がある。",
   503: "\nモデルが混雑している。時間をおくか --model で別の Flash を指定する。",
+  504: `\n${GENERATE_TIMEOUT_MESSAGE}`,
 };
 
 const DEFAULT_PROMPT = `この動画の内容を日本語で要約してください。次の4点を必ず含めること。
@@ -55,7 +65,7 @@ const USAGE = `使い方: video-summary <YouTube URL | 動画ファイル> [プ�
 オプション:
   --fps <n>            映像のサンプリング頻度（既定は毎秒1コマ、範囲は 0 より大きく 24 以下）
                        スライド中心の動画は 0.2 程度で足りる
-  --resolution <v>     low（既定・約100トークン/秒）または default（約300トークン/秒）
+  --resolution <v>     low（既定）または high
   --model <id>         既定は ${DEFAULT_MODEL}。無料枠は Flash 系のみ
   --vertex             Vertex AI（ADC 認証・GOOGLE_CLOUD_PROJECT 必須）へ切り替える
   --json               本文と消費トークンを JSON で出力する
@@ -134,7 +144,7 @@ function parseArgs(argv: string[]): Options {
 
   const resolution = RESOLUTIONS[resolutionInput];
   if (resolution === undefined) {
-    throw new UsageError(`--resolution は low か default を指定する: ${resolutionInput}`);
+    throw new UsageError(`--resolution は low か high を指定する: ${resolutionInput}`);
   }
 
   return {
@@ -301,6 +311,13 @@ async function buildVideoPart(
   return input;
 }
 
+function summarizeTokenDetails(details: ModalityTokenCount[] | undefined) {
+  return (details ?? []).map((detail) => ({
+    modality: detail.modality ?? null,
+    tokenCount: detail.tokenCount ?? null,
+  }));
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const source = await inspectVideoSource(options);
@@ -309,10 +326,15 @@ async function main(): Promise<void> {
 
   let response;
   try {
+    // 長い動画は解析に5分を超えることがあるため、生成要求の待ち時間を15分へ延ばす。
+    // 503は失敗してもRPDを消費し得るため、自動再試行せず利用者に判断を委ねる。
     response = await ai.models.generateContent({
       model: options.model,
       contents: createUserContent([videoPart, options.prompt]),
-      config: { mediaResolution: options.resolution },
+      config: {
+        mediaResolution: options.resolution,
+        httpOptions: { timeout: GENERATE_TIMEOUT_MS },
+      },
     });
   } finally {
     if (uploadedFileName) await deleteUploadedFile(ai, uploadedFileName);
@@ -334,17 +356,31 @@ async function main(): Promise<void> {
   const tokens = {
     input: usage?.promptTokenCount ?? 0,
     output: usage?.candidatesTokenCount ?? 0,
+    thoughtsTokenCount: usage?.thoughtsTokenCount ?? 0,
     total: usage?.totalTokenCount ?? 0,
+    promptTokensDetails: summarizeTokenDetails(usage?.promptTokensDetails),
+    candidatesTokensDetails: summarizeTokenDetails(usage?.candidatesTokensDetails),
   };
 
   if (options.json) {
-    console.log(JSON.stringify({ text, model: options.model, usage: tokens }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          text,
+          model: options.model,
+          modelVersion: response.modelVersion ?? null,
+          usage: tokens,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   console.log(text);
   console.error(
-    `\n--- 消費トークン: 入力 ${tokens.input} / 出力 ${tokens.output} / 合計 ${tokens.total} ---`,
+    `\n--- 消費トークン: 入力 ${tokens.input} / 出力 ${tokens.output} / 思考 ${tokens.thoughtsTokenCount} / 合計 ${tokens.total} ---`,
   );
 }
 
@@ -363,7 +399,27 @@ function formatError(error: unknown): string {
   if (error instanceof ApiError) {
     return `API エラー (${error.status}): ${extractApiMessage(error.message)}${ERROR_HINTS[error.status] ?? ""}`;
   }
+  if (isTimeoutError(error)) return GENERATE_TIMEOUT_MESSAGE;
   return error instanceof Error ? error.message : String(error);
+}
+
+function isTimeoutError(error: unknown): boolean {
+  let current = error;
+  while (current instanceof Error) {
+    const code = (current as Error & { code?: unknown }).code;
+    if (
+      current.name === "TimeoutError" ||
+      current.name === "AbortError" ||
+      code === "ETIMEDOUT" ||
+      code === "UND_ERR_HEADERS_TIMEOUT" ||
+      code === "UND_ERR_BODY_TIMEOUT" ||
+      /timed out|timeout/i.test(current.message)
+    ) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
 }
 
 try {

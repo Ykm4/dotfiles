@@ -1,7 +1,6 @@
-# skills の実行時依存はリポジトリに含めない（新マシンでは bun install で復元）
+# skills の node_modules はリポジトリに含めない（bun.lock から復元）
 .config/claude/_shared/skills/*/node_modules
 .config/claude/_shared/skills/*/node_modules/**
-.config/claude/_shared/skills/*/bun.lock
 
 # Finder のメタデータはソースに紛れ込んでも配備しない
 **/.DS_Store
