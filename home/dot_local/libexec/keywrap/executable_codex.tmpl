@@ -1,0 +1,86 @@
+#!/bin/sh
+# Codex CLI の鍵注入ラッパー（keywrap）。生成物: 編集しない。正本は dotfiles。
+# Codex の context7 MCP は config.toml の env_http_headers で CONTEXT7_API_KEY を
+# プロセス環境から読む。秘密をシェル環境に常在させない設計（2026-08-30 API キー
+# 露出インシデント対応）のため、codex 起動の瞬間だけ鍵ファイルから読んで注入する。
+# 委譲先は PATH 上で次に見つかる codex（cmux の CLI shim があればそれ）なので、
+# cmux 連携は保たれる。鍵を読めないときは警告だけ出して素の codex として続行する
+# （context7 MCP だけが認証失敗し、codex 本体は使える。fail-open）。
+
+umask 077
+
+secret_file='{{ .chezmoi.homeDir }}/.config/secrets/claude/personal.env'
+var_name='CONTEXT7_API_KEY'
+fallback_bin='/opt/homebrew/bin/codex'
+
+warn() {
+    printf '%s\n' "codex-keywrap: $1（context7 なしで続行）" >&2
+}
+
+self_id=$(/usr/bin/stat -L -f '%d:%i' "$0" 2>/dev/null)
+
+# PATH から自分自身（と同一実体）を除いた次の codex を探す。
+real_bin=''
+old_ifs=$IFS
+IFS=:
+for d in $PATH; do
+    [ -n "$d" ] || continue
+    c="$d/codex"
+    [ -f "$c" ] && [ -x "$c" ] || continue
+    cid=$(/usr/bin/stat -L -f '%d:%i' "$c" 2>/dev/null) || continue
+    [ -n "$self_id" ] && [ "$cid" = "$self_id" ] && continue
+    real_bin=$c
+    break
+done
+IFS=$old_ifs
+
+[ -n "$real_bin" ] || real_bin=$fallback_bin
+if [ ! -x "$real_bin" ]; then
+    printf '%s\n' "codex-keywrap: codex の実体が見つからない" >&2
+    exit 1
+fi
+
+# 鍵ファイルの検査は厳格に、失敗時は fail-open（注入せず続行）。
+inject=1
+if [ ! -f "$secret_file" ] || [ -L "$secret_file" ]; then
+    warn "鍵ファイルが無い"; inject=0
+elif [ "$(/usr/bin/stat -f '%Lp' "$secret_file" 2>/dev/null)" != "600" ]; then
+    warn "鍵ファイルは 0600 であること"; inject=0
+fi
+
+if [ "$inject" = "1" ]; then
+    found=0
+    secret_value=
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|\#*) continue ;;
+            *=*) key=${line%%=*}; value=${line#*=} ;;
+            *) warn "鍵ファイルに不正な行がある"; inject=0; break ;;
+        esac
+        [ "$key" = "$var_name" ] || continue
+        found=$((found + 1))
+        if [ "$found" -ne 1 ]; then
+            warn "変数が重複定義されている"; inject=0; break
+        fi
+        secret_value=$value
+    done < "$secret_file"
+
+    if [ "$inject" = "1" ]; then
+        if [ "$found" -ne 1 ] || [ -z "$secret_value" ]; then
+            warn "変数が未定義か空"; inject=0
+        else
+            carriage_return=$(printf '\r')
+            case "$secret_value" in
+                *"$carriage_return"*) warn "値に制御文字が含まれる"; inject=0 ;;
+            esac
+        fi
+    fi
+
+    if [ "$inject" = "1" ]; then
+        CONTEXT7_API_KEY=$secret_value
+        export CONTEXT7_API_KEY
+    fi
+    unset secret_value value line
+fi
+
+exec "$real_bin" "$@"

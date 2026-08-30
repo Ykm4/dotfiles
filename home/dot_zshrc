@@ -114,6 +114,11 @@ gws-profile() {
 # ------------------------------------
 # aliases
 # ------------------------------------
+# codex は keywrap ラッパー経由で起動する（context7 用 API キーを起動の瞬間だけ注入。
+# cmux の CLI shim が PATH 先頭に入るため、PATH ではなく alias で確実に経由させる。
+# ラッパーは PATH 上の次の codex（cmux shim があればそれ）へ委譲するので cmux 連携は保たれる）
+[[ -x "$HOME/.local/libexec/keywrap/codex" ]] && alias codex="$HOME/.local/libexec/keywrap/codex"
+
 if command -v eza >/dev/null 2>&1; then
   alias ei="eza --icons --git"
   alias ea="eza -a --icons --git"
