@@ -5,15 +5,30 @@
 // 送信するのは公開 URL とプロンプトだけなので、プロンプトに社内固有の文脈を書かないこと。
 
 import {
+  ApiError,
   GoogleGenAI,
   MediaResolution,
   createPartFromUri,
+  createUserContent,
   type File as GenAiFile,
   type Part,
 } from "@google/genai";
-import { extname } from "node:path";
 
 const DEFAULT_MODEL = "gemini-3.7-flash";
+
+// アップロードした動画が処理を終えるまで待つ間隔と回数。積で待ち時間の上限になる。
+const POLL_INTERVAL_MS = 5_000;
+const POLL_MAX_ATTEMPTS = 60;
+
+const RESOLUTIONS: Record<string, MediaResolution> = {
+  low: MediaResolution.MEDIA_RESOLUTION_LOW,
+  default: MediaResolution.MEDIA_RESOLUTION_MEDIUM,
+};
+
+const ERROR_HINTS: Record<number, string> = {
+  429: "\n無料枠の上限に達した。1日20本を使い切ったか、長い動画で TPM 25万を超えた可能性がある。",
+  503: "\nモデルが混雑している。時間をおくか --model で別の Flash を指定する。",
+};
 
 const DEFAULT_PROMPT = `この動画の内容を日本語で要約してください。次の4点を必ず含めること。
 - 全体の要旨を3〜5文で述べる。
@@ -21,18 +36,6 @@ const DEFAULT_PROMPT = `この動画の内容を日本語で要約してくだ�
 - スライドや画面に図表・コード・数値が映る場合は、そこに書かれている内容を文章で説明する。
 - 音声では語られない視覚情報（デモの操作手順、グラフの傾向、画面遷移）も拾う。
 視覚情報が乏しい動画では、その旨を一言添えたうえで音声の内容だけを要約すること。`;
-
-// 拡張子から MIME タイプを引く。Files API はアップロード時に MIME タイプを要求する。
-const MIME_BY_EXT: Record<string, string> = {
-  ".mp4": "video/mp4",
-  ".mov": "video/mov",
-  ".mpeg": "video/mpeg",
-  ".mpg": "video/mpg",
-  ".avi": "video/avi",
-  ".wmv": "video/wmv",
-  ".flv": "video/x-flv",
-  ".webm": "video/webm",
-};
 
 interface Options {
   target: string;
@@ -106,7 +109,6 @@ function parseArgs(argv: string[]): Options {
       case "--help":
         console.log(USAGE);
         process.exit(0);
-      // eslint-disable-next-line no-fallthrough
       default:
         if (arg.startsWith("--")) throw new UsageError(`不明なオプション: ${arg}`);
         if (target === "") target = arg;
@@ -116,12 +118,7 @@ function parseArgs(argv: string[]): Options {
 
   if (target === "") throw new UsageError(USAGE);
 
-  const resolution =
-    resolutionInput === "low"
-      ? MediaResolution.MEDIA_RESOLUTION_LOW
-      : resolutionInput === "default" || resolutionInput === "medium"
-        ? MediaResolution.MEDIA_RESOLUTION_MEDIUM
-        : undefined;
+  const resolution = RESOLUTIONS[resolutionInput];
   if (resolution === undefined) {
     throw new UsageError(`--resolution は low か default を指定する: ${resolutionInput}`);
   }
@@ -148,7 +145,9 @@ function createClient(options: Options): GoogleGenAI {
     });
   }
 
-  const apiKey = process.env["GEMINI_API_KEY"] ?? process.env["GOOGLE_API_KEY"];
+  // mise がプロファイル単位で GEMINI_API_KEY を供給する。
+  // SDK が環境から拾うときは GOOGLE_API_KEY を優先するため、取り違えを避けてここで明示的に渡す。
+  const apiKey = process.env["GEMINI_API_KEY"];
   if (!apiKey) {
     throw new UsageError(
       [
@@ -170,13 +169,16 @@ async function waitUntilActive(ai: GoogleGenAI, uploaded: GenAiFile): Promise<Ge
   if (!name) throw new Error("アップロード結果にファイル名が無い");
 
   let file = uploaded;
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
     if (file.state === "ACTIVE") return file;
-    if (file.state === "FAILED") throw new Error(`動画の処理に失敗した: ${file.error?.message ?? "理由不明"}`);
-    await Bun.sleep(5000);
+    if (file.state === "FAILED") {
+      throw new Error(`動画の処理に失敗した: ${file.error?.message ?? "理由不明"}`);
+    }
+    await Bun.sleep(POLL_INTERVAL_MS);
     file = await ai.files.get({ name });
   }
-  throw new Error("動画の処理が5分以内に終わらなかった");
+  const limitMinutes = (POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 60_000;
+  throw new Error(`動画の処理が${limitMinutes}分以内に終わらなかった`);
 }
 
 async function buildVideoPart(ai: GoogleGenAI, options: Options): Promise<Part> {
@@ -184,13 +186,16 @@ async function buildVideoPart(ai: GoogleGenAI, options: Options): Promise<Part> 
 
   if (/^https?:\/\//.test(options.target)) {
     // YouTube URL はアップロード不要で、Gemini が YouTube 側から直接取得する。
-    part = { fileData: { fileUri: options.target, mimeType: "video/mp4" } };
+    part = createPartFromUri(options.target, "video/mp4");
   } else {
     const source = Bun.file(options.target);
     if (!(await source.exists())) throw new UsageError(`ファイルが見つからない: ${options.target}`);
 
-    const mimeType = MIME_BY_EXT[extname(options.target).toLowerCase()];
-    if (!mimeType) throw new UsageError(`対応していない動画形式である: ${options.target}`);
+    // MIME タイプの判定は Bun のテーブル（mime-db 準拠）に任せる。SDK 内蔵の推定より網羅的である。
+    const mimeType = source.type.split(";")[0] ?? "";
+    if (!mimeType.startsWith("video/")) {
+      throw new UsageError(`動画として扱えない形式である（${mimeType || "判定不能"}）: ${options.target}`);
+    }
 
     console.error(`アップロード中: ${options.target}`);
     const uploaded = await ai.files.upload({ file: options.target, config: { mimeType } });
@@ -210,7 +215,7 @@ async function main(): Promise<void> {
 
   const response = await ai.models.generateContent({
     model: options.model,
-    contents: [{ role: "user", parts: [videoPart, { text: options.prompt }] }],
+    contents: createUserContent([videoPart, options.prompt]),
     config: { mediaResolution: options.resolution },
   });
 
@@ -221,54 +226,39 @@ async function main(): Promise<void> {
   }
 
   const usage = response.usageMetadata;
+  const tokens = {
+    input: usage?.promptTokenCount ?? 0,
+    output: usage?.candidatesTokenCount ?? 0,
+    total: usage?.totalTokenCount ?? 0,
+  };
+
   if (options.json) {
-    console.log(
-      JSON.stringify(
-        {
-          text,
-          model: options.model,
-          usage: {
-            input: usage?.promptTokenCount ?? 0,
-            output: usage?.candidatesTokenCount ?? 0,
-            total: usage?.totalTokenCount ?? 0,
-          },
-        },
-        null,
-        2,
-      ),
-    );
+    console.log(JSON.stringify({ text, model: options.model, usage: tokens }, null, 2));
     return;
   }
 
   console.log(text);
   console.error(
-    `\n--- 消費トークン: 入力 ${usage?.promptTokenCount ?? 0} / 出力 ${usage?.candidatesTokenCount ?? 0} / 合計 ${usage?.totalTokenCount ?? 0} ---`,
+    `\n--- 消費トークン: 入力 ${tokens.input} / 出力 ${tokens.output} / 合計 ${tokens.total} ---`,
   );
 }
 
-// SDK は API のエラー応答を JSON 文字列のまま Error.message に入れる。そのままでは読みにくいので整形する。
-function formatError(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
-
+// SDK は API のエラー応答を JSON 文字列のまま ApiError.message に入れる。
+// 本文の取り出しはその形に依存するが、分岐に使う HTTP ステータスは型付きの status から読む。
+function extractApiMessage(raw: string): string {
   try {
-    const parsed = JSON.parse(error.message) as {
-      error?: { code?: number; message?: string; status?: string };
-    };
-    const detail = parsed.error;
-    if (detail?.message) {
-      const label = detail.status ?? String(detail.code ?? "不明");
-      const hint =
-        detail.code === 503
-          ? "\nモデルが混雑している。時間をおくか --model で別の Flash を指定する。"
-          : detail.code === 429
-            ? "\n無料枠の上限に達した。1日20本を使い切ったか、長い動画で TPM 25万を超えた可能性がある。"
-            : "";
-      return `API エラー (${label}): ${detail.message}${hint}`;
-    }
+    const parsed = JSON.parse(raw) as { error?: { message?: string } };
+    return parsed.error?.message ?? raw;
   } catch {
-    // JSON でなければ素のメッセージとして扱う。
+    return raw;
   }
-  return error.message;
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return `API エラー (${error.status}): ${extractApiMessage(error.message)}${ERROR_HINTS[error.status] ?? ""}`;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 try {
