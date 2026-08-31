@@ -16,9 +16,10 @@
 _.path = ["{{env.HOME}}/.local/libexec/keywrap"]
 FIRECRAWL_KEY_FILE = "{{env.HOME}}/.config/secrets/claude/personal.env"
 FIRECRAWL_KEY_VAR = "FIRECRAWL_API_KEY"
-# Claude Code のサブプロセス（Bash・hooks・stdio MCP）から Anthropic・クラウド系資格情報を
-# 除去する公式機能。第三者鍵は sandbox.credentials.envVars が主で、これは補助層。
-CLAUDE_CODE_SUBPROCESS_ENV_SCRUB = "1"
+# 注意: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB は設定しない。2026-08-31 に「=1 だと
+# Claude Code が settings の permissions.defaultMode: auto を読む前に manual へ
+# 黙って強制する」ことがバイナリ解析で判明し撤去した。サブプロセスからの
+# 資格情報除去は sandbox.credentials.envVars（台帳全変数の deny）が主層として担う。
 
 # タスク定義から共有するパス。run と usage（complete 含む）の両方で {{vars.x}} として展開される。
 [vars]
