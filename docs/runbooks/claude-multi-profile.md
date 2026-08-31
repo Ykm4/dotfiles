@@ -52,8 +52,38 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
   （mise グローバル `[env] _.path` がツールパスより前に置く）。
 - `.zshenv` は `CLAUDECODE=1` のシェルで台帳の全変数を unset し、MULTIOS を無効化する（保険層）。
 - Claude Code の settings は `~/.config/secrets` の読み取りを deny し、
-  sandbox の credentials 拒否リスト（台帳から生成）を enabled=false で持つ。
-  有効化は sentinel 検査（`mise run claude:secrets-audit`）を通してから行う。
+  sandbox（OS 強制・enabled=true）で秘密ファイルを Bash とその全子プロセスから遮断する。
+- sandbox 構成の根拠（2026-08-30 に `--settings` の1セッション検証で実測）:
+  - `network.allowedDomains: ["*"]` — 既定は全ドメイン都度プロンプトで無人運転が
+    止まるため全許可。遮断の主目的はファイル（秘密）で、ネットワーク隔離は採らない。
+  - `filesystem.allowWrite` — 既定は作業ディレクトリ外の書き込み拒否で gws トークン
+    更新や mise の状態書き込みが壊れる。ホーム全域許可は自己改変（settings 生成物・
+    keywrap・shell rc の汚染、~/.config/secrets の上書き）を許すため採らず、実際の
+    書き込み先だけを列挙する（Codex レビュー指摘）。不足は即失敗で見えるので都度追記。
+  - `allowUnixSockets`（1Password の agent.sock 1本のみ）— unix ソケットは既定
+    ブロックで、コミット署名（gpg.format=ssh・op-ssh-sign）が使う 1Password
+    エージェントが塞がれ署名が失敗するため。gnupg は未使用のため許可しない。
+    docker(colima) も未許可で、エージェントからの docker は sandbox 下では動かない。
+    注意: ソケット許可はエージェント配下の Bash に SSH 署名・認証の要求能力を残す
+    （sandbox 導入前と同等。1Password 側でキーを絞る強化は将来課題）。
+  - `enableWeakerNetworkIsolation: true` — Go 製 CLI（gh・gws・gcloud）は sandbox の
+    ネットワークプロキシの証明書を信頼せず TLS 検証に失敗するため（実測）。
+    **配置は `sandbox` 直下**（`network` 内に書くと黙って無視される。実測で確定）。
+  - gh は動かす判断のため `Read(~/.config/gh/hosts.yml)` と `Read(~/.aws/**)` の deny は
+    撤去したまま（aws は client 案件の CLI 動作を優先）。gnupg・kube・docker の Read()
+    deny は復活済み（対応する CLI をエージェントから使う必要が出たら再検討）。
+    `gh auth token` はトークンを直接出力するため deny を追加。
+    `git credential fill` 等の資格情報オラクルは sandbox 導入前と同等の残余リスク。
+  - `allowUnsandboxedCommands: false` — 違反時の昇格再実行を禁止し、無人時は
+    即失敗で可視化する。
+  - 注意: `permissions.deny` の `Read()` ルールは sandbox 有効時に OS 強制へ昇格し、
+    CLI 自身の設定読み込みまで遮断する（実測）。gh・gnupg・aws・kube・docker の
+    `Read()` deny はこの理由で base から撤去した（cat/grep 系 deny は残置）。
+    ツールが自分の設定を読めず壊れたら、まず deny リストとの衝突を疑う。
+  - 注意: `credentials.files` の `mode` は deny か mask のみ。無効な値を書くと
+    保護層全体が黙って無効化される（実測）。変更時は必ず sentinel 検査で確認する。
+  - sandbox 下ではエージェントからの firecrawl CLI と video:summarize は鍵を
+    読めない（設計どおり。エージェントは firecrawl MCP を使い、CLI は人間用）。
 - 鍵のローテーション: 1Password の値を更新 → `chezmoi apply`。MCP の再登録は不要
   （headersHelper が次の接続で新しい値を読む）。
 - 検査: `mise run claude:secrets-audit` が mise env・新シェル・ファイル権限・helper（raw と

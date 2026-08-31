@@ -20,9 +20,10 @@
 {{- /* 配備先のプロファイル構成（生成物）への直接編集を拒否し、dotfiles の正本へ誘導する */ -}}
 {{- $denyGenerated := "~/.config/claude/_shared/scripts/deny-generated-config-edit.sh" -}}
 {{- /* 秘密台帳から sandbox.credentials の deny リストを生成する（2026-08-30 露出インシデント対応）。
-      enabled=false のまま配る: 手順[6]（漏れ経路の sentinel 検査後）で true へ切り替える。
       credentials.files は OS サンドボックス（Seatbelt）で Bash とその子の読み取りを拒否し、
-      envVars は誤って親環境へ再導入された場合の保険として全秘密変数を unset する。 */ -}}
+      envVars は誤って親環境へ再導入された場合の保険として全秘密変数を unset する。
+      各キーの選定根拠（network 全許可・allowWrite ホーム全域・gnupg ソケット許可等）は
+      docs/runbooks/claude-multi-profile.md のシークレット節を参照。実測検証 2026-08-30。 */ -}}
 {{- $clientLedger := dict -}}
 {{- if hasKey .root "clientSecretsLedger" }}{{ $clientLedger = .root.clientSecretsLedger }}{{ end -}}
 {{- $ledger := merge (dict) .root.secretsLedger $clientLedger -}}
@@ -31,9 +32,29 @@
 {{- $secretVars = concat $secretVars (list "FIRECRAWL_API_KEY" "GEMINI_API_KEY") | uniq | sortAlpha -}}
 {{- $sandboxEnvVars := list -}}
 {{- range $secretVars }}{{ $sandboxEnvVars = append $sandboxEnvVars (dict "name" . "mode" "deny") }}{{ end -}}
+{{- $home := .root.chezmoi.homeDir -}}
+{{- /* enableWeakerNetworkIsolation は sandbox 直下が正（network 内に書くと黙って無視される。
+      2026-08-31 に両配置を実測して確定）。allowUnixSockets はコミット署名
+      （gpg.format=ssh・op-ssh-sign）が使う 1Password エージェントの1本だけ
+      （gnupg は未使用のため許可しない）。allowWrite はホーム全域でなく実際の
+      書き込み先だけを列挙する（自己改変防止: settings 生成物・keywrap・
+      ~/.config/secrets は書けない）。不足が出たら失敗が見えるので都度追記する。 */ -}}
 {{- $sandbox := dict
-      "enabled" false
+      "enabled" true
       "failIfUnavailable" true
+      "allowUnsandboxedCommands" false
+      "enableWeakerNetworkIsolation" true
+      "network" (dict
+        "allowedDomains" (list "*")
+        "allowUnixSockets" (list
+          (printf "%s/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" $home)))
+      "filesystem" (dict "allowWrite" (list
+        "~/work/" "~/other/"
+        "~/.config/gws/" "~/.config/gh/" "~/.config/gcloud/" "~/.config/gemini/"
+        "~/.config/claude/_private/"
+        "~/.local/share/" "~/.local/state/" "~/.cache/" "~/.npm/" "~/.bun/" "~/.codex/"
+        "~/Library/Caches/" "~/Library/pnpm/"
+        "/private/tmp/" "/tmp/"))
       "credentials" (dict
         "files" (list (dict "path" "~/.config/secrets" "mode" "deny"))
         "envVars" $sandboxEnvVars)

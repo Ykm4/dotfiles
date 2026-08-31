@@ -3,8 +3,12 @@
 # Codex の context7 MCP は config.toml の env_http_headers で CONTEXT7_API_KEY を
 # プロセス環境から読む。秘密をシェル環境に常在させない設計（2026-08-30 API キー
 # 露出インシデント対応）のため、codex 起動の瞬間だけ鍵ファイルから読んで注入する。
-# 委譲先は PATH 上で次に見つかる codex（cmux の CLI shim があればそれ）なので、
-# cmux 連携は保たれる。鍵を読めないときは警告だけ出して素の codex として続行する
+# 委譲の連鎖は「cmux shim → 本ラッパー → 実体」の一方向に固定する。cmux の CLI shim も
+# 「PATH 上の次の codex」へ委譲するため、本ラッパーが shim へ委譲し返すと無限ループになる
+# （実測: PATH が肥大して E2BIG）。よって shim のディレクトリ（*cmux-cli-shims*）は
+# 探索から除外し、本ラッパーは実体へだけ委譲する。cmux 連携は shim が入口になる経路
+# （cmux pane での対話利用）でそのまま保たれる。
+# 鍵を読めないときは警告だけ出して素の codex として続行する
 # （context7 MCP だけが認証失敗し、codex 本体は使える。fail-open）。
 
 umask 077
@@ -19,12 +23,15 @@ warn() {
 
 self_id=$(/usr/bin/stat -L -f '%d:%i' "$0" 2>/dev/null)
 
-# PATH から自分自身（と同一実体）を除いた次の codex を探す。
+# PATH から自分自身（同一実体）と cmux shim を除いた次の codex を探す。
 real_bin=''
 old_ifs=$IFS
 IFS=:
 for d in $PATH; do
     [ -n "$d" ] || continue
+    case "$d" in
+        *cmux-cli-shims*) continue ;;
+    esac
     c="$d/codex"
     [ -f "$c" ] && [ -x "$c" ] || continue
     cid=$(/usr/bin/stat -L -f '%d:%i' "$c" 2>/dev/null) || continue
