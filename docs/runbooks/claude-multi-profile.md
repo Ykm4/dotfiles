@@ -88,7 +88,11 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
   （headersHelper が次の接続で新しい値を読む）。
 - 検査: `mise run claude:secrets-audit` が mise env・新シェル・ファイル権限・helper（raw と
   Bearer）を、値を表示せずに確認する。検査は1か所でなく、各プロファイルの作業ディレクトリ
-  （mise コンテキスト）ごとに実行する。
+  （mise コンテキスト）ごとに実行する。**人間の端末で実行すること**: エージェントの
+  sandbox 内からは ~/.config/secrets に一切触れないため、ファイル権限と helper の
+  3検査が原理的に NG になる（それ自体が遮断の証拠）。
+- permissions.allow のルールは sandbox の書き込み許可へ昇格するため、ホーム直下の
+  ファイルを指す Edit 許可（旧 `Edit(~/.zshrc)` 等）を書かない（自己改変の穴になる）。
 - 供給経路を変えたときは、apply 前から開いていたシェルに旧環境変数が残る。
   全 Claude を終了し、既存ターミナルを再起動してから新シェルで監査する。
 - chezmoi は read-source-state の pre hook で `op vault list` を実行するため、

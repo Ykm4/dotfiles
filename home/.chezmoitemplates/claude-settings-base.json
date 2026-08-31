@@ -67,8 +67,7 @@
       "Bash(docker inspect *)",
       "Bash(colima status)",
       "Bash(colima start)",
-      "Bash(colima stop)",
-      "Edit(~/.zshrc)"
+      "Bash(colima stop)"
     ],
     "deny": [
       "Bash(env)",
