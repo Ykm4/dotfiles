@@ -83,11 +83,6 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   kind = "github"
   repo = "cloudflare/skills"
   autoUpdate = true
-  [[claudeProfiles.hucom-system.marketplaces]]
-  name = "hucom-system"
-  kind = "github"
-  repo = "hucom-system/claude-plugins"
-  autoUpdate = true
   [[claudeProfiles.hucom-system.plugins]]
   id = "slack@claude-plugins-official"
   enabled = true
