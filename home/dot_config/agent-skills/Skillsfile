@@ -1,11 +1,14 @@
 # Agent skills manifest（mise run agent-skills:dump が生成。手編集しない）
 # 形式: <owner/repo> <skill> [skill...]
 # 復元: mise run agent-skills:restore
+anthropics/claude-plugins-community eli5
 anthropics/skills skill-creator
 cloudflare/skills agents-sdk durable-objects wrangler
 firecrawl/cli firecrawl
 github/gh-stack gh-stack
 googleworkspace/cli gws-admin-reports gws-calendar gws-calendar-agenda gws-calendar-insert gws-chat gws-chat-send gws-classroom gws-docs gws-docs-write gws-drive gws-drive-upload gws-events gws-events-renew gws-events-subscribe gws-forms gws-gmail gws-gmail-forward gws-gmail-read gws-gmail-reply gws-gmail-reply-all gws-gmail-send gws-gmail-triage gws-gmail-watch gws-keep gws-meet gws-modelarmor gws-modelarmor-create-template gws-modelarmor-sanitize-prompt gws-modelarmor-sanitize-response gws-people gws-script gws-script-push gws-shared gws-sheets gws-sheets-append gws-sheets-read gws-slides gws-tasks gws-workflow gws-workflow-email-to-task gws-workflow-file-announce gws-workflow-meeting-prep gws-workflow-standup-report gws-workflow-weekly-digest
+humanlayer/skills show-me
 softaworks/agent-toolkit mermaid-diagrams naming-analyzer
+tt-a1i/archify archify
 vercel-labs/agent-browser agent-browser
 vercel-labs/skills find-skills
