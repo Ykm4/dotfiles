@@ -51,8 +51,14 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 - 鍵が要る CLI は `~/.local/libexec/keywrap/` のラッパー経由で実行の瞬間だけ読む
   （mise グローバル `[env] _.path` がツールパスより前に置く）。
 - `.zshenv` は `CLAUDECODE=1` のシェルで台帳の全変数を unset し、MULTIOS を無効化する（保険層）。
-- Claude Code の settings は `~/.config/secrets` の読み取りを deny し、
-  sandbox（OS 強制・enabled=true）で秘密ファイルを Bash とその全子プロセスから遮断する。
+- Claude Code の settings は `~/.config/secrets` の読み取りを deny する。
+  sandbox は **enabled=false で待機**（2026-08-31、運用影響が大きくユーザー判断で
+  無効化。構成ブロックは検証済みのまま維持しており、テンプレートの enabled を
+  true に戻す1行 + apply + install-profiles で再有効化できる）。無効時の残余は
+  「Python 等の任意バイナリ経由の秘密ファイル読み取りを permissions.deny では
+  塞げない」1点（0600・env 全廃・利用地点供給は据え置き）。
+  無効時は Read()/cat 系 deny がツール自身の設定読込を遮らないため、
+  gh hosts.yml・aws の Read() deny は復活させてある（再有効化時は再び撤去が必要）。
 - sandbox 構成の根拠（2026-08-30 に `--settings` の1セッション検証で実測）:
   - `network.allowedDomains: ["*"]` — 既定は全ドメイン都度プロンプトで無人運転が
     止まるため全許可。遮断の主目的はファイル（秘密）で、ネットワーク隔離は採らない。

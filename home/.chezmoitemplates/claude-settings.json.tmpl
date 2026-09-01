@@ -39,8 +39,11 @@
       （gnupg は未使用のため許可しない）。allowWrite はホーム全域でなく実際の
       書き込み先だけを列挙する（自己改変防止: settings 生成物・keywrap・
       ~/.config/secrets は書けない）。不足が出たら失敗が見えるので都度追記する。 */ -}}
+{{- /* 2026-08-31: sandbox は運用影響（従来作業のブロック）が大きくユーザー判断で無効化した。
+      構成ブロックは再有効化に備えて維持する（enabled を true に戻すだけで復帰）。
+      無効時は Read()/cat 系の permissions.deny・env からの秘密全廃・0600 が防御を担う。 */ -}}
 {{- $sandbox := dict
-      "enabled" true
+      "enabled" false
       "failIfUnavailable" true
       "allowUnsandboxedCommands" false
       "enableWeakerNetworkIsolation" true
