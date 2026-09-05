@@ -103,7 +103,6 @@ jq = "latest"
 go = "1"
 
 # Cloudflare CLI
-"go:github.com/cloudflare/cloudflare-go/cmd/flarectl" = "latest"
 
 # ============================================================
 # データベースツール
