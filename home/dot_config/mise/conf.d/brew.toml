@@ -7,6 +7,9 @@
 # 合成タスクを指すと tools:updaters → brew:upgrade → brew:cask:check → tools:updaters の循環になる。
 [tasks."brew:upgrade:run"]
 hide = true
+# wait_for: mise:undeclared は mise 本体を呼ぶ。brew が /opt/homebrew/bin/mise を unlink → link する窓に
+# 重なると command not found で落ちるため、検出を終えてから貼り替えを始める（mise:upgrade と同じ理由）。
+wait_for = ["mise:undeclared"]
 # auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
 # Homebrew 6.0 から引数なしの brew upgrade が auto_updates cask も対象にするようになったので、明示的に無効化する。
 # 無効化しないと visual-studio-code の uninstall launchctl から sudo が走る。

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#MISE description="宣言の無いインストール済みツールと、mise uninstall の消し残しを検出する（二重管理と残骸の防止）"
+# tools:update では最初のフェーズに置く。更新タスクが失敗すると DAG がそこで止まるため、後段に置くと
+# playwright-cli の trust policy 失敗のような既知の失敗があるだけで検出が走らなくなる。
+# brew:upgrade:run 側が本タスクを wait_for しており、mise 本体の貼り替え窓とも重ならない。
+# 宣言が無いままインストールだけ残ると、mise はそのツールの shim を作り続ける。
+# shim は PATH で brew の実体を覆うため、mise を知らないプロセスが sanitize された PATH で
+# 素の名前で呼ぶと、フォールバック先を見つけられず「No version is set for shim」で落ちる。
+# 2026-09-04 に gh で発生し、Homebrew の attestation 検証が失敗して brew upgrade が止まった。
+# 検出のみを行い削除はしない。一度も訪問していないプロジェクト設定は mise の追跡対象外で
+# 誤検出になりうるため、判断は人に残す。
+set -uo pipefail
+
+# 判定はインストール済み一覧と「追跡設定が要求している一覧」の差集合で行う。設定ファイルを
+# 自前で解析しないので、TOML の書式や .tool-versions との形式差に影響されない。
+# --all-sources は要求元の設定を持つツールだけを返す（宣言の無いツールは列に現れない）ため、
+# 単独では検出に使えない。差集合にして初めて「インストールだけ残っているもの」が出る。
+if ! installed=$(mise ls --json); then
+  echo "mise ls の実行に失敗した。検査を中止する。" >&2
+  exit 1
+fi
+if ! declared=$(mise ls --json --all-sources); then
+  echo "mise ls --all-sources の実行に失敗した。検査を中止する。" >&2
+  exit 1
+fi
+
+if ! undeclared=$(
+  jq -rn --argjson installed "${installed}" --argjson declared "${declared}" '
+    (($installed | keys) - ($declared | keys))[]
+  '
+); then
+  echo "mise ls の出力を解析できなかった。検査を中止する。" >&2
+  exit 1
+fi
+
+# mise uninstall は版ディレクトリを消してもエイリアスのリンク（2 / 2.99 / latest 等）を残す。
+# 残ったリンクは mise ls に出ないため上の差集合では拾えない。実体の版ディレクトリを 1 つも持たず
+# リンクだけが残っているツールを、インストールの残骸として報告する。
+installs_dir="${MISE_INSTALLS_DIR:-${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}/installs}"
+# 判定は [ -d ] でリンクを辿って行う。実体のディレクトリだけでなく、mise link で張った有効な
+# リンクも「版がある」と見なすため、link 運用のツールを残骸と誤判定しない。
+leftovers=()
+for dir in "${installs_dir}"/*/; do
+  [ -d "${dir}" ] || continue
+  has_version=false
+  has_dangling=false
+  for entry in "${dir}"*; do
+    if [ -d "${entry}" ]; then
+      has_version=true
+      break
+    fi
+    # 参照先が無いリンクはここだけに落ちる（[ -e ] は偽、[ -L ] は真）。
+    [ -L "${entry}" ] && has_dangling=true
+  done
+  if [ "${has_version}" = false ] && [ "${has_dangling}" = true ]; then
+    leftovers+=("$(basename "${dir}")")
+  fi
+done
+
+if [ -z "${undeclared}" ] && [ "${#leftovers[@]}" -eq 0 ]; then
+  echo "宣言の無いインストール済みツールも、インストールの残骸も無い。"
+  exit 0
+fi
+
+if [ -n "${undeclared}" ]; then
+  echo "どの設定にも宣言が無いインストール済みツール:"
+  printf '%s\n' "${undeclared}" | sed 's/^/  - /'
+  echo
+  echo "brew など別経路で管理しているなら mise uninstall <tool> で外す。"
+  echo "mise で管理するなら [tools] に宣言を足す。"
+fi
+
+if [ "${#leftovers[@]}" -gt 0 ]; then
+  [ -n "${undeclared}" ] && echo
+  echo "実体が無くリンクだけ残っているインストール（mise uninstall の消し残し）:"
+  printf '  - %s\n' "${leftovers[@]}"
+  echo
+  echo "参照先が無いので rm -rf ${installs_dir}/<名前> で消してよい。"
+fi

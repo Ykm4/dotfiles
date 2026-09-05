@@ -126,7 +126,7 @@ description = "追跡設定から参照されなくなった旧バージョン�
 wait_for = ["mise:upgrade", "tools:updaters"]
 run = "mise prune --yes"
 
-# 更新フェーズ（[1]〜[3]）の集約タスク。更新タスクを増やすときはここへ足すだけにする。
+# 更新フェーズ（[2]〜[4]）の集約タスク。更新タスクを増やすときはここへ足すだけにする。
 # 掃除タスク（mise:prune / brew:cleanup）はこれを wait_for に取ることで、tools:update 実行時に
 # 全更新の完了後へ順序づけられる（単体実行や brew:update では存在しないので待ちは発生しない）。
 [tasks."tools:updaters"]
@@ -141,16 +141,18 @@ depends = [
     "gh-ext:upgrade",
 ]
 
-# wait_for により 4 フェーズで進む。各段の中だけが並列になるので、
+# wait_for により 5 フェーズで進む。各段の中だけが並列になるので、
 # ターミナル上で「いま何をしているか」が読み取りやすい。
-#   [1] brew:upgrade:run                               … Homebrew 本体と formula / cask の更新
-#   [2] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
-#   [3] textlint:update + agent-skills:update          … mise 管理のツールを使う更新
-#   [4] mise:prune + brew:cask:check → brew:cleanup    … 掃除（Homebrew 側は Caskroom の破損検査を通ってから）
+#   [1] mise:undeclared                                … 宣言が無いままインストールが残ったツールの検出（報告のみ。brew の貼り替え前に済ませる）
+#   [2] brew:upgrade:run                               … Homebrew 本体と formula / cask の更新
+#   [3] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
+#   [4] textlint:update + agent-skills:update          … mise 管理のツールを使う更新
+#   [5] mise:prune + brew:cask:check → brew:cleanup    … 掃除（Homebrew 側は Caskroom の破損検査を通ってから）
 [tasks."tools:update"]
-description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（4 フェーズ DAG）"
+description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（5 フェーズ DAG）"
 depends = [
     "tools:updaters",
     "mise:prune",
     "brew:cleanup",
+    "mise:undeclared",
 ]
