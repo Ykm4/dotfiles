@@ -42,8 +42,6 @@ brew "git-lfs"
 brew "googleworkspace-cli"
 # Tools and libraries to manipulate images in select formats
 brew "imagemagick"
-# Lightweight and flexible command-line JSON processor
-brew "jq"
 # Simple terminal UI for git commands
 brew "lazygit"
 # Polyglot runtime manager (asdf rust clone)

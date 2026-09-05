@@ -87,6 +87,17 @@ aube = "latest"
 "npm:typescript-language-server" = "latest"
 
 # ============================================================
+# 汎用 CLI
+# ============================================================
+# @see https://github.com/jqlang/jq
+# JSON の整形・抽出。back-office の admin-directory 系スクリプト、conf.d/skills.toml、
+# tasks/mise/undeclared が使う。project 側の mise.toml には宣言しない（project だけの宣言は、
+# その配下の外で解決できない shim が brew の実体を覆う。2026-09-04 の gh の障害と同型）。
+# Homebrew との二重管理を避けるため brew の formula は 2026-09-05 に Brewfile から外した。
+# secrets ヘルパーは SIP 保護下の /usr/bin/jq に固定しており、本項の変更に影響されない。
+jq = "latest"
+
+# ============================================================
 # Go関連ツール
 # ============================================================
 go = "1"
