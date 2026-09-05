@@ -28,7 +28,8 @@ secret_file_default='{{ .root.chezmoi.homeDir }}/.config/secrets/claude/{{ .prof
 var_name='{{ $h.var }}'
 header_name='{{ $h.name }}'
 value_mode='{{ $mode }}'
-jq_bin='{{ lookPath "jq" | default "/opt/homebrew/bin/jq" }}'
+# jq は macOS 同梱の /usr/bin/jq に固定する。lookPath で解決した mise shim や Homebrew のパスは、ツール管理の変更で消えると全ヘルパーが一斉に壊れるため使わない。
+jq_bin='/usr/bin/jq'
 
 fail() {
     printf '%s\n' "headers-helper: $1" >&2
