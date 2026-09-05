@@ -60,7 +60,7 @@ require_command() {
 
 resolve_commands() {
   USQL_BIN=$(require_command usql 'mise install usql')
-  JQ_BIN=$(require_command jq 'brew install jq')
+  JQ_BIN=$(require_command jq 'mise install jq')
   SSH_BIN=$(require_command ssh 'macOS 標準の OpenSSH を利用できる状態にしてください')
   PYTHON_BIN=$(require_command python3 'brew install python')
   MKTEMP_BIN=$(require_command mktemp 'macOS 標準の mktemp を利用できる状態にしてください')
