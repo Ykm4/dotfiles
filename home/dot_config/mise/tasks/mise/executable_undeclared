@@ -49,8 +49,10 @@ for dir in "${installs_dir}"/*/; do
       has_version=true
       break
     fi
-    # 参照先が無いリンクはここだけに落ちる（[ -e ] は偽、[ -L ] は真）。
-    [ -L "${entry}" ] && has_dangling=true
+    # 参照先が無いリンクだけを候補にする。ファイルを指す有効なリンクは [ -e ] が真なので除く。
+    if [ -L "${entry}" ] && [ ! -e "${entry}" ]; then
+      has_dangling=true
+    fi
   done
   if [ "${has_version}" = false ] && [ "${has_dangling}" = true ]; then
     leftovers+=("$(basename "${dir}")")
