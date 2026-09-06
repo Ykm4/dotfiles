@@ -195,8 +195,9 @@ check_profile() {
     if [ "$base" = "settings.json" ]; then
       # 生成元はキーがソート済みで配備先はそうとは限らないため、正規化して比較する。
       # 配備先が JSON として壊れているときは正規化せずそのまま比較に回す。
-      jq -S . "$dst/$base" >"$work/.dst.normalized" 2>/dev/null || cp "$dst/$base" "$work/.dst.normalized"
-      jq -S . "$work/$base" >"$work/.new.normalized"
+      # model は /model の選択が配備先に保存される値で、正本には無い。比較から外す。
+      jq -S 'del(.model)' "$dst/$base" >"$work/.dst.normalized" 2>/dev/null || cp "$dst/$base" "$work/.dst.normalized"
+      jq -S 'del(.model)' "$work/$base" >"$work/.new.normalized"
       if ! cmp -s "$work/.dst.normalized" "$work/.new.normalized"; then
         echo "[$name] 差分あり: ${base}（左が配備先、右が生成元。キー順は正規化済み）"
         diff -u "$work/.dst.normalized" "$work/.new.normalized" | sed -n '1,40p' || true
@@ -256,6 +257,14 @@ install_profile() {
     jq -e . "$backup/new/settings.json.merged" >/dev/null || die "$name: オーバーレイのマージ結果が JSON でない"
     /bin/mv "$backup/new/settings.json.merged" "$backup/new/settings.json"
     echo "[$name] 非公開オーバーレイをマージした"
+  fi
+
+  # model は /model の選択が配備先に保存される値で、正本には無い。差し替えで消さないよう引き継ぐ。
+  if [ -f "$dst/settings.json" ] && jq -e '.model' "$dst/settings.json" >/dev/null 2>&1; then
+    jq -s '.[0] + {model: .[1].model}' "$backup/new/settings.json" "$dst/settings.json" >"$backup/new/settings.json.merged"
+    jq -e . "$backup/new/settings.json.merged" >/dev/null || die "$name: model の引き継ぎ結果が JSON でない"
+    /bin/mv "$backup/new/settings.json.merged" "$backup/new/settings.json"
+    echo "[$name] 配備先の model を引き継いだ"
   fi
 
   # 差し替え直前にもう一度 Claude の停止（絞り込み時は省略）を確認し、

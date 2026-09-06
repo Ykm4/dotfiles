@@ -82,9 +82,7 @@ plugins = []
 [claudeProfiles.hucom-system]
 configDir = ".config/claude/hucom-system"
 explicitEnv = true
-# 法人 Max プランなので Fable 5 を既定モデルにする。personal は Pro のため指定しない
-# （Pro では Fable 5 がクレジット消費になるため、プランに応じた既定に任せる）。
-model = "claude-fable-5[1m]"
+# model はどのプロファイルでも宣言しない。/model で選んだ値は配備先の settings.json に保存され、正本で上書きしない（2026-09-06）。
 theme = "dark"
 excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   [[claudeProfiles.hucom-system.marketplaces]]
