@@ -43,6 +43,12 @@ kind = "builtin"
 name = "diagram-design"
 kind = "github"
 repo = "cathrynlavery/diagram-design"
+# OpenAI 公式の Codex 連携（/codex:review・rescue 等）。Codex CLI の版に追随するため自動更新する。
+[[claudeProfilesCommon.marketplaces]]
+name = "openai-codex"
+kind = "github"
+repo = "openai/codex-plugin-cc"
+autoUpdate = true
 [[claudeProfilesCommon.plugins]]
 id = "superpowers@claude-plugins-official"
 enabled = true
@@ -51,6 +57,9 @@ id = "typescript-lsp@claude-plugins-official"
 enabled = true
 [[claudeProfilesCommon.plugins]]
 id = "diagram-design@diagram-design"
+enabled = true
+[[claudeProfilesCommon.plugins]]
+id = "codex@openai-codex"
 enabled = true
 
 [claudeProfiles.personal]

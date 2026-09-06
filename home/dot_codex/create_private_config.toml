@@ -8,7 +8,7 @@ model_reasoning_effort = "high"
 plan_mode_reasoning_effort = "high"
 
 # 更新は brew（cask）で管理するため、起動時のアップデート確認を抑止する。
-# 対話プロンプトが codex exec（codex-bridge）をタイムアウトさせるのを防ぐ目的もある。
+# 対話プロンプトが codex exec（keiba の ask-codex.sh や Claude Code の codex プラグイン）を止めるのを防ぐ目的もある。
 check_for_update_on_startup = false
 
 # テレメトリを送らない
