@@ -1,0 +1,10 @@
+# Python 版 playwright の更新。tools:update の DAG から呼ばれる。
+#
+# playwright 本体は [tools] の python の postinstall で site-packages に入るため、
+# python 自体が入れ直されない限り mise upgrade では版が上がらない。ここで明示的に上げる。
+# ブラウザ実体（~/Library/Caches/ms-playwright）は mise の管理外だが、playwright install が
+# .links に登録の無い版を削除するので、このタスクを通す限り旧版は残らない。
+# 掃除まで含めて 1 コマンドなので mise:prune 側に足すものは無い。
+[tasks."playwright:update"]
+description = "Python 版 playwright と対応する chromium を更新し、参照されなくなったブラウザを削除する"
+run = "python -m pip install --upgrade playwright && python -m playwright install chromium"

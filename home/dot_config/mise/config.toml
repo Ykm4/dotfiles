@@ -87,6 +87,19 @@ aube = "latest"
 "npm:typescript-language-server" = "latest"
 
 # ============================================================
+# Python 関連ツール
+# ============================================================
+# diagram-design プラグインの /diagram-design:export-diagram が Python 版 playwright を
+# 前提にしている（references/export.md の PNG export procedure）。素の macOS には python が
+# 無く（python3 だけ）、Homebrew の python3 にも playwright は入らないため、ここで両方を揃える。
+# postinstall は mise が管理する python の中で走るので、import playwright がそのまま通る。
+# postinstall は新規マシンでの初期導入だけを担う。以後の更新と旧ブラウザの掃除は
+# conf.d/playwright.toml の playwright:update（tools:update から呼ばれる）が行うため、
+# 版を固定する必要はなく、複数版が溜まることもない。
+# npm:@playwright/cli とは別物（あちらは Node 版で、ブラウザ実体も別管理）。
+python = { version = "3.13", postinstall = "python -m pip install --upgrade playwright && python -m playwright install chromium" }
+
+# ============================================================
 # 汎用 CLI
 # ============================================================
 # @see https://github.com/jqlang/jq
@@ -149,6 +162,7 @@ depends = [
     "textlint:update",
     "agent-skills:update",
     "gh-ext:upgrade",
+    "playwright:update",
 ]
 
 # wait_for により 5 フェーズで進む。各段の中だけが並列になるので、
