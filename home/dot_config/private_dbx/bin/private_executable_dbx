@@ -370,7 +370,7 @@ load_credential_url() {
       fi
       ;;
     ssm)
-      AWS_BIN=$(require_command aws 'brew install awscli')
+      AWS_BIN=$(require_command aws 'aws-cli を mise.toml に宣言した作業ツリーの配下で実行する（mise use aws-cli@latest）')
       credential_profile=$(read_target_field "$target" '.credential.profile')
       if ! credential_url=$(
         "$AWS_BIN" ssm get-parameter \
