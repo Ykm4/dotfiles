@@ -41,11 +41,11 @@ virtualenvとPythonパス由来の導入失敗は過去にも繰り返し報告�
 
 Apple SiliconではSDK同梱Pythonの実体が無い。`bundled-python3-unix`のmanifestは0件で、
 `platform/bundledpythonunix`も存在せず、ランチャーは外部Pythonを要求する。したがって
-`python@3.14`はHomebrewで管理し続ける。`awscli`と`pipx`も同じformulaを使う。
+`python@3.14`はHomebrewで管理し続ける。`pipx`も同じformulaを使う（`awscli`は2026-09-14にmise管理へ移した）。
 
 Brewfileに直接宣言する。Homebrew 6の`brew bundle install`は、宣言済みformulaの
 `installed_on_request`をtrueへ補正する。実装は`bundle/subcommand/install.rb`が呼ぶ
-`mark_as_installed_on_request!`である。これにより、依存元の`awscli`や`pipx`を消しても
+`mark_as_installed_on_request!`である。これにより、依存元の`pipx`を消しても
 `brew autoremove`の対象にならない。既存機では移行時に状態を即時補正するため
 `brew install python@3.14`を一度実行した。
 

@@ -4,8 +4,6 @@ tap "homebrew/services"
 tap "manaflow-ai/cmux", trusted: { casks: ["cmux"] }
 # Run your GitHub Actions locally
 brew "act"
-# Official Amazon AWS command-line interface
-brew "awscli"
 # Clone of cat(1) with syntax highlighting and Git integration
 brew "bat"
 # Manage your dotfiles across multiple diverse machines, securely
@@ -56,7 +54,7 @@ brew "pkgconf"
 brew "poppler"
 # Google Cloud CLI の実行に使う Python（gcloud は公式 archive から導入するため cask 依存では入らない）
 # Apple Silicon では SDK 同梱 Python の実体が無く（bundled-python3-unix の manifest は 0 件）、
-# ランチャーは外部 Python を要求する。awscli と pipx も同じ formula を使う。
+# ランチャーは外部 Python を要求する。pipx も同じ formula を使う（awscli は 2026-09-14 に mise 管理へ移した）。
 brew "python@3.14"
 # Ruby version manager
 brew "rbenv"
