@@ -1,7 +1,10 @@
 # Codex CLI のユーザー設定（リファレンス: https://developers.openai.com/codex/config-reference）
 # chezmoi は初回のみこのファイルを生成する（create_ 方式）。以後は Codex 自身が [projects]（trust 情報）や
-# [notice]・[tui.model_availability_nux] 等の実行時状態を追記して育てるため、既存ファイルには干渉しない。
-# 雛形を変えたときの既存マシンへの反映は手動で行う。取引先固有のパス・MCP はこの雛形に書かない。
+# [notice]・[tui.model_availability_nux]・[marketplaces]・[plugins] 等の実行時状態を追記して育てるため、
+# 既存ファイルには干渉しない。雛形を変えたときの既存マシンへの反映は手動で行う。
+# 取引先固有のパス・MCP はこの雛形に書かない。
+# plugin と marketplace は mise run codex:restore が導入する（Codex が [marketplaces]・[plugins] を書く）。
+# 全体向けの指示は同じディレクトリの AGENTS.md（dotfiles 管理）にある。
 
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
@@ -11,29 +14,228 @@ plan_mode_reasoning_effort = "high"
 # 対話プロンプトが codex exec（keiba の ask-codex.sh や Claude Code の codex プラグイン）を止めるのを防ぐ目的もある。
 check_for_update_on_startup = false
 
+# AGENTS.md が無いリポジトリでは CLAUDE.md を読む（Claude Code と同じプロジェクト指示を共有する）。
+project_doc_fallback_filenames = ["CLAUDE.md"]
+
 # テレメトリを送らない
 [analytics]
 enabled = false
 
-# 重い解析用: codex exec --profile deep で切替（旗艦モデル + 最大推論）
-[profiles.deep]
-model = "gpt-5.6-sol"
-model_reasoning_effort = "ultra"
+# プロファイル（codex exec --profile <name>）は同じディレクトリの <name>.config.toml に置く。
+# 本ファイル内の [profiles.<name>] は旧形式で、存在すると --profile がエラーになる（0.153 で実測）。
+# deep: 重い解析用（旗艦モデル + 最大推論）。bridge: 非対話ブリッジ用（承認待ちで止まらない読み取り専用）。
 
-# 非対話ブリッジ用: 承認待ちで止まらない読み取り専用実行
-[profiles.bridge]
-sandbox_mode = "read-only"
-approval_policy = "never"
-
-# 公開サービスの MCP（API キーは環境変数名の参照に留め、値を書かない）
+# MCP。API キーは http_headers_helper が接続の瞬間に ~/.config/secrets/claude/<プロファイル>.env から生成する
+# （Claude Code の headersHelper と同じスクリプト。出力は「ヘッダ名: 値」の平坦な JSON）。
+# 環境変数にも本ファイルにも値を書かない。helper は chezmoi apply が秘密台帳から生成する。
+# firecrawl は MCP を使わず、keywrap 済みの firecrawl CLI と ~/.agents/skills/firecrawl で賄う。
+# MF クラウド会計 MCP は Codex には入れない。Google Cloud CLI MCP は事前登録 OAuth クライアントの
+# client secret を Codex が扱えないため入れない（gcloud はシェルで使う）。
 [mcp_servers.context7]
 url = "https://mcp.context7.com/mcp"
+http_headers_helper = "~/.config/secrets/claude/helpers/personal-context7.sh"
 
-[mcp_servers.context7.env_http_headers]
-CONTEXT7_API_KEY = "CONTEXT7_API_KEY"
+[mcp_servers.google-dev-knowledge]
+url = "https://developerknowledge.googleapis.com/mcp"
+http_headers_helper = "~/.config/secrets/claude/helpers/hucom-system-google-dev-knowledge.sh"
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
 
 [tui]
 status_line = ["model-with-reasoning", "context-remaining", "current-dir", "model-name", "context-used", "five-hour-limit", "codex-version", "context-window-size", "used-tokens"]
 
 [tui.keymap.editor]
 insert_newline = ["shift-enter", "alt-enter"]
+
+# skills。~/.agents/skills（skills CLI の正本。mise run agent-skills:restore で復元）は Codex が自動探索する。
+# ~/.codex/skills には置かない（~/.agents/skills と重複するため）。
+# cloudflare plugin が agents-sdk・durable-objects・wrangler を同梱するので、~/.agents/skills 側はパス指定で無効化する。
+[[skills.config]]
+path = "~/.agents/skills/agents-sdk/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "~/.agents/skills/durable-objects/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "~/.agents/skills/wrangler/SKILL.md"
+enabled = false
+
+# gws-*（Google Workspace CLI の skill 44 件）は Codex では使わないため無効化する（copilot と同じ）。
+[[skills.config]]
+name = "gws-admin-reports"
+enabled = false
+
+[[skills.config]]
+name = "gws-calendar"
+enabled = false
+
+[[skills.config]]
+name = "gws-calendar-agenda"
+enabled = false
+
+[[skills.config]]
+name = "gws-calendar-insert"
+enabled = false
+
+[[skills.config]]
+name = "gws-chat"
+enabled = false
+
+[[skills.config]]
+name = "gws-chat-send"
+enabled = false
+
+[[skills.config]]
+name = "gws-classroom"
+enabled = false
+
+[[skills.config]]
+name = "gws-docs"
+enabled = false
+
+[[skills.config]]
+name = "gws-docs-write"
+enabled = false
+
+[[skills.config]]
+name = "gws-drive"
+enabled = false
+
+[[skills.config]]
+name = "gws-drive-upload"
+enabled = false
+
+[[skills.config]]
+name = "gws-events"
+enabled = false
+
+[[skills.config]]
+name = "gws-events-renew"
+enabled = false
+
+[[skills.config]]
+name = "gws-events-subscribe"
+enabled = false
+
+[[skills.config]]
+name = "gws-forms"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-forward"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-read"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-reply"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-reply-all"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-send"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-triage"
+enabled = false
+
+[[skills.config]]
+name = "gws-gmail-watch"
+enabled = false
+
+[[skills.config]]
+name = "gws-keep"
+enabled = false
+
+[[skills.config]]
+name = "gws-meet"
+enabled = false
+
+[[skills.config]]
+name = "gws-modelarmor"
+enabled = false
+
+[[skills.config]]
+name = "gws-modelarmor-create-template"
+enabled = false
+
+[[skills.config]]
+name = "gws-modelarmor-sanitize-prompt"
+enabled = false
+
+[[skills.config]]
+name = "gws-modelarmor-sanitize-response"
+enabled = false
+
+[[skills.config]]
+name = "gws-people"
+enabled = false
+
+[[skills.config]]
+name = "gws-script"
+enabled = false
+
+[[skills.config]]
+name = "gws-script-push"
+enabled = false
+
+[[skills.config]]
+name = "gws-shared"
+enabled = false
+
+[[skills.config]]
+name = "gws-sheets"
+enabled = false
+
+[[skills.config]]
+name = "gws-sheets-append"
+enabled = false
+
+[[skills.config]]
+name = "gws-sheets-read"
+enabled = false
+
+[[skills.config]]
+name = "gws-slides"
+enabled = false
+
+[[skills.config]]
+name = "gws-tasks"
+enabled = false
+
+[[skills.config]]
+name = "gws-workflow"
+enabled = false
+
+[[skills.config]]
+name = "gws-workflow-email-to-task"
+enabled = false
+
+[[skills.config]]
+name = "gws-workflow-file-announce"
+enabled = false
+
+[[skills.config]]
+name = "gws-workflow-meeting-prep"
+enabled = false
+
+[[skills.config]]
+name = "gws-workflow-standup-report"
+enabled = false
+
+[[skills.config]]
+name = "gws-workflow-weekly-digest"
+enabled = false

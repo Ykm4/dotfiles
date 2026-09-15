@@ -50,6 +50,8 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
   接続の瞬間に env ファイルからヘッダを生成する。環境変数にも MCP 設定にも値を置かない。
 - 鍵が要る CLI は `~/.local/libexec/keywrap/` のラッパー経由で実行の瞬間だけ読む
   （mise グローバル `[env] _.path` がツールパスより前に置く）。
+- Codex CLI の MCP は `~/.codex/config.toml` の `http_headers_helper` に同じ headersHelper を
+  指定して鍵を注入する（keywrap は使わない）。plugin は `mise run codex:restore` が導入する。
 - `.zshenv` は `CLAUDECODE=1` のシェルで台帳の全変数を unset し、MULTIOS を無効化する（保険層）。
 - Claude Code の settings は `~/.config/secrets` の読み取りを deny する。
   sandbox は **enabled=false で待機**（2026-08-31、運用影響が大きくユーザー判断で

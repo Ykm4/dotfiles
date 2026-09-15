@@ -1,0 +1,4 @@
+# Codex CLI のプロファイル deep（codex exec --profile deep）。重い解析用: 旗艦モデル + 最大推論。
+# chezmoi は初回のみ生成する（create_ 方式）。正本は dotfiles。
+model = "gpt-5.6-sol"
+model_reasoning_effort = "ultra"

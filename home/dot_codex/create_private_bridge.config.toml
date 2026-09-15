@@ -1,0 +1,4 @@
+# Codex CLI のプロファイル bridge（codex exec --profile bridge）。非対話ブリッジ用: 承認待ちで止まらない読み取り専用実行。
+# chezmoi は初回のみ生成する（create_ 方式）。正本は dotfiles。
+sandbox_mode = "read-only"
+approval_policy = "never"

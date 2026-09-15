@@ -114,9 +114,6 @@ gws-profile() {
 # ------------------------------------
 # aliases
 # ------------------------------------
-# codex の鍵注入は keywrap ラッパーが担う（alias は不要）。
-# cmux pane では shim → keywrap → 実体、それ以外では keywrap（mise の _.path）→ 実体の
-# 連鎖で必ず経由される。ラッパー側が cmux shim を探索から除外して無限ループを防いでいる。
 if command -v eza >/dev/null 2>&1; then
   alias ei="eza --icons --git"
   alias ea="eza -a --icons --git"

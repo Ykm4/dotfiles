@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#MISE description="Codex CLI の marketplace と plugin を宣言どおりに導入する（冪等・新マシン用）"
+# 宣言はこのファイルの MARKETPLACES と PLUGINS だけ。Codex は Claude Code 形式の marketplace
+# （.claude-plugin/marketplace.json と plugin.json）をそのまま読めるため、Claude と同じ供給元を使う。
+# MCP と skills の設定は ~/.codex/config.toml（雛形は dotfiles の home/dot_codex/create_private_config.toml）。
+# 契約: 宣言した marketplace と plugin が導入済みであることを保証する。導入済みなら何もしない。
+# 満たせない項目は詳細を表示して非0で終わる。
+set -euo pipefail
+
+[ $# -eq 0 ] || { echo "未知の引数: $*" >&2; exit 2; }
+
+command -v codex >/dev/null || { echo "codex CLI が無い" >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq が無い" >&2; exit 1; }
+
+# <marketplace 名>=<owner/repo>。名前は marketplace.json の name と一致させる（codex plugin marketplace list の表示名）。
+MARKETPLACES=(
+  "claude-plugins-official=anthropics/claude-plugins-official"
+  "cloudflare=cloudflare/skills"
+)
+# <plugin>@<marketplace 名>
+PLUGINS=(
+  "superpowers@claude-plugins-official"
+  "cloudflare@cloudflare"
+)
+
+rc=0
+
+# 表形式の STATUS 列は「installed, enabled」のように語が分かれるので、判定は --json で行う。
+marketplace_names() {
+  codex plugin marketplace list --json 2>/dev/null | jq -r '.marketplaces[].name'
+}
+
+installed_plugins() {
+  codex plugin list --json 2>/dev/null | jq -r '.installed[] | select(.installed) | .pluginId'
+}
+
+echo "== marketplaces"
+names="$(marketplace_names)"
+for entry in "${MARKETPLACES[@]}"; do
+  name="${entry%%=*}"; source="${entry#*=}"
+  if grep -qx "$name" <<<"$names"; then
+    echo "  marketplace ok: $name"
+  elif codex plugin marketplace add "$source" >/dev/null; then
+    echo "  marketplace added: ${name}（${source}）"
+  else
+    echo "  marketplace failed: ${name}（${source}）" >&2; rc=1
+  fi
+done
+
+echo "== plugins"
+installed="$(installed_plugins)"
+for plugin in "${PLUGINS[@]}"; do
+  if grep -qx "$plugin" <<<"$installed"; then
+    echo "  plugin ok: $plugin"
+  elif codex plugin add "$plugin" >/dev/null; then
+    echo "  plugin added: $plugin"
+  else
+    echo "  plugin failed: $plugin" >&2; rc=1
+  fi
+done
+
+if [ "$rc" -ne 0 ]; then
+  echo "未完了の項目がある。原因を直して mise run codex:restore を再実行すること" >&2
+fi
+exit "$rc"
