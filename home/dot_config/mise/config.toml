@@ -146,8 +146,12 @@ run = [
 ]
 
 [tasks."mise:check"]
-description = "更新可能な mise ツールを表示する（変更は加えない）"
-run = "mise outdated"
+description = "グローバルの [tools] と、呼び出した場所のプロジェクト設定のうち、更新可能な mise ツールを表示する（変更は加えない）"
+# 対象は mise:upgrade と揃える（1 行目がグローバル設定、2 行目が呼び出した場所のプロジェクト設定）。
+run = [
+    "mise outdated",
+    'mise -C "{{cwd}}" outdated --local',
+]
 
 [tasks."mise:prune"]
 description = "宣言済みツールのうち、追跡設定から参照されなくなった旧バージョンを削除する（宣言の無いツールは削除しない）"
