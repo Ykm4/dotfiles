@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="宣言の無いインストール済みツールと、mise uninstall の消し残しを検出する（二重管理と残骸の防止）"
-# tools:update では最初のフェーズに置く。更新タスクが失敗すると DAG がそこで止まるため、後段に置くと
-# playwright-cli の trust policy 失敗のような既知の失敗があるだけで検出が走らなくなる。
+# tools:update では最初のフェーズに置く。
+# 更新タスクが失敗すると DAG がそこで止まるため、後段に置くと、上流の公開経路の変更で trust policy に掛かるような手元では直せない失敗が続くだけで、検出が走らなくなる。
 # brew:upgrade:run 側が本タスクを wait_for しており、mise 本体の貼り替え窓とも重ならない。
 # 宣言が無いままインストールだけ残ると、mise はそのツールの shim を作り続ける。
 # shim は PATH で brew の実体を覆うため、mise を知らないプロセスが sanitize された PATH で
