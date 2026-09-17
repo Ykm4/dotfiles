@@ -143,11 +143,33 @@ description = "更新可能な mise ツールを表示する（変更は加え�
 run = "mise outdated"
 
 [tasks."mise:prune"]
-description = "追跡設定から参照されなくなった旧バージョンを削除する"
+description = "宣言済みツールのうち、追跡設定から参照されなくなった旧バージョンを削除する（宣言の無いツールは削除しない）"
 # --yes 必須: 確認プロンプトは非対話実行で暗黙に「いいえ」となり、何も削除されない
 # wait_for: tools:update では全更新タスク（tools:updaters）の完了後に、参照されなくなった版を削除する。
 wait_for = ["mise:upgrade", "tools:updaters"]
-run = "mise prune --yes"
+# 引数なしの mise prune は宣言の無いツールも丸ごと削除し、mise:undeclared が人に残した判断を同じ実行の中で覆してしまう。
+# そのため、追跡設定に宣言のあるツール名だけを引数に渡す。
+# 引数を渡しても、存在しない設定を指す追跡リンクの掃除は続く。
+# --tools を付けるとその掃除まで止まるので付けない。
+# 宣言済みツールが 0 件なら中止する。
+# 引数なしの呼び出しに戻ると、宣言の無いツールまで削除対象になるため。
+run = '''
+set -f
+if ! declared="$(mise ls --json --all-sources)"; then
+  echo "ERROR: mise ls --all-sources が失敗した。何も削除せずに中止する。" >&2
+  exit 1
+fi
+if ! tools="$(printf '%s' "${declared}" | jq -r 'keys[]')"; then
+  echo "ERROR: mise ls の出力を解析できなかった。何も削除せずに中止する。" >&2
+  exit 1
+fi
+if [ -z "${tools}" ]; then
+  echo "ERROR: 宣言済みツールが 0 件だった。引数なしの mise prune は宣言の無いツールも削除するので中止する。" >&2
+  exit 1
+fi
+# ツール名は空白を含まないので、改行区切りの一覧を単語分割で引数に展開する（グロブ展開は set -f で止めてある）。
+mise prune --yes ${tools}
+'''
 
 # 更新フェーズ（[2]〜[4]）の集約タスク。更新タスクを増やすときはここへ足すだけにする。
 # 掃除タスク（mise:prune / brew:cleanup）はこれを wait_for に取ることで、tools:update 実行時に
@@ -171,9 +193,9 @@ depends = [
 #   [2] brew:upgrade:run                               … Homebrew 本体と formula / cask の更新
 #   [3] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
 #   [4] textlint:update + agent-skills:update          … mise 管理のツールを使う更新
-#   [5] mise:prune + brew:cask:check → brew:cleanup    … 掃除（Homebrew 側は Caskroom の破損検査を通ってから）
+#   [5] mise:prune + brew:cask:check → brew:cleanup    … 掃除（mise 側は宣言済みツールだけ。Homebrew 側は Caskroom の破損検査を通ってから）
 [tasks."tools:update"]
-description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（5 フェーズ DAG）"
+description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）"
 depends = [
     "tools:updaters",
     "mise:prune",

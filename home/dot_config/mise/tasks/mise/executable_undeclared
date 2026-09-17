@@ -7,8 +7,9 @@
 # shim は PATH で brew の実体を覆うため、mise を知らないプロセスが sanitize された PATH で
 # 素の名前で呼ぶと、フォールバック先を見つけられず「No version is set for shim」で落ちる。
 # 2026-09-04 に gh で発生し、Homebrew の attestation 検証が失敗して brew upgrade が止まった。
-# 検出のみを行い削除はしない。一度も訪問していないプロジェクト設定は mise の追跡対象外で
-# 誤検出になりうるため、判断は人に残す。
+# 検出のみを行い削除はしない。
+# 一度も訪問していないプロジェクト設定は mise の追跡対象外で誤検出になりうるため、判断は人に残す。
+# 後段の mise:prune も宣言済みツールだけを対象にするので、ここで報告したツールは tools:update の中では削除されない。
 set -uo pipefail
 
 # 判定はインストール済み一覧と「追跡設定が要求している一覧」の差集合で行う。設定ファイルを
@@ -70,6 +71,7 @@ if [ -n "${undeclared}" ]; then
   echo
   echo "brew など別経路で管理しているなら mise uninstall <tool> で外す。"
   echo "mise で管理するなら [tools] に宣言を足す。"
+  echo "tools:update の mise:prune は宣言の無いツールを削除しないので、対応するまで毎回報告する。"
 fi
 
 if [ "${#leftovers[@]}" -gt 0 ]; then
