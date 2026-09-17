@@ -7,4 +7,8 @@
 # 掃除まで含めて 1 コマンドなので mise:prune 側に足すものは無い。
 [tasks."playwright:update"]
 description = "Python 版 playwright と対応する chromium を更新し、参照されなくなったブラウザを削除する"
+# wait_for: mise が管理する python を使う更新なので、mise:upgrade の完了後（tools:update の第4フェーズ）に走らせる。
+# 待たないと最初のフェーズで mise:undeclared と並行し、python が更新される前の環境で pip を実行しうる。
+# wait_for は mise:upgrade を起動しないので、単体で実行したときは待たずに始まる。
+wait_for = ["mise:upgrade"]
 run = "python -m pip install --upgrade playwright && python -m playwright install chromium"

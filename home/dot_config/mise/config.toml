@@ -204,13 +204,13 @@ depends = [
 
 # wait_for により 5 フェーズで進む。各段の中だけが並列になるので、
 # ターミナル上で「いま何をしているか」が読み取りやすい。
-#   [1] mise:undeclared                                … 宣言が無いままインストールが残ったツールの検出（報告のみ。brew の貼り替え前に済ませる）
-#   [2] brew:upgrade:run                               … Homebrew 本体と formula / cask の更新
-#   [3] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]（グローバルと呼び出した場所のプロジェクト）・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
-#   [4] textlint:update + agent-skills:update          … mise 管理のツールを使う更新
-#   [5] mise:prune + brew:cask:check → brew:cleanup    … 掃除（mise 側は宣言済みツールだけ。Homebrew 側は Caskroom の破損検査を通ってから）
+#   [1] mise:undeclared                                           … 宣言が無いままインストールが残ったツールの検出（報告のみ。brew の貼り替え前に済ませる）
+#   [2] brew:upgrade:run                                          … Homebrew 本体と formula / cask の更新
+#   [3] mise:upgrade + gh-ext:upgrade + gcloud:upgrade            … [tools]（グローバルと呼び出した場所のプロジェクト）・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
+#   [4] textlint:update + agent-skills:update + playwright:update … mise 管理のツールを使う更新
+#   [5] mise:prune + brew:cask:check → brew:cleanup               … 掃除（mise 側は宣言済みツールだけ。Homebrew 側は Caskroom の破損検査を通ってから）
 [tasks."tools:update"]
-description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）"
+description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・textlint・Python 版 playwright を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）"
 depends = [
     "tools:updaters",
     "mise:prune",
