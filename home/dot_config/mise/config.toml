@@ -140,17 +140,21 @@ wait_for = ["brew:upgrade:run"]
 # 2 行目は呼び出した場所で --local を付けて動かし、プロジェクト設定に宣言したツールだけを更新する。
 # プロジェクトがグローバルと同じツールを別の範囲で宣言していると（node の 24 と 26 など）、その場所ではプロジェクトの宣言が優先されるため、1 回の mise upgrade では両方を更新できない。
 # 呼び出した場所にプロジェクト設定が無ければ 2 行目は何も更新しない。
+# 呼び出した場所は、mise がタスクに渡す環境変数 MISE_ORIGINAL_CWD から受け取る。
+# {{cwd}} をスクリプトに埋め込むと、パスに含まれる $() やバッククォートをシェルが実行してしまうため。
+# 変数が空なら、黙って config_root で動かずに失敗させる。
 run = [
     "mise upgrade",
-    'mise -C "{{cwd}}" upgrade --local',
+    'mise -C "${MISE_ORIGINAL_CWD:?}" upgrade --local',
 ]
 
 [tasks."mise:check"]
 description = "グローバルの [tools] と、呼び出した場所のプロジェクト設定のうち、更新可能な mise ツールを表示する（変更は加えない）"
 # 対象は mise:upgrade と揃える（1 行目がグローバル設定、2 行目が呼び出した場所のプロジェクト設定）。
+# 呼び出した場所の受け取り方（MISE_ORIGINAL_CWD）も mise:upgrade と同じにする。
 run = [
     "mise outdated",
-    'mise -C "{{cwd}}" outdated --local',
+    'mise -C "${MISE_ORIGINAL_CWD:?}" outdated --local',
 ]
 
 [tasks."mise:prune"]
