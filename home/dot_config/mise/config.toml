@@ -130,13 +130,20 @@ mongosh = "latest"
 usql = "latest"
 
 [tasks."mise:upgrade"]
-description = "[tools] に宣言した全ツールを更新する"
+description = "グローバルの [tools] と、呼び出した場所のプロジェクト設定に宣言したツールを更新する"
 # wait_for: mise 本体が brew formula のため、brew:upgrade が /opt/homebrew/bin/mise を貼り替え終えてから実行する。
 # 同時に走らせると unlink と link の間に mise が PATH から消える窓ができ、後続タスクが command not found になりうる。
 # 合成タスクの brew:upgrade ではなく brew:upgrade:run を指すこと。合成側は brew:cask:check を depends に
 # 持つため、そちらを指すと tools:updaters を経由した循環になる。
 wait_for = ["brew:upgrade:run"]
-run = "mise upgrade"
+# 1 行目はタスクの既定の作業ディレクトリ（本ファイルの config_root）で動くので、グローバル設定のツールだけが対象になる。
+# 2 行目は呼び出した場所で --local を付けて動かし、プロジェクト設定に宣言したツールだけを更新する。
+# プロジェクトがグローバルと同じツールを別の範囲で宣言していると（node の 24 と 26 など）、その場所ではプロジェクトの宣言が優先されるため、1 回の mise upgrade では両方を更新できない。
+# 呼び出した場所にプロジェクト設定が無ければ 2 行目は何も更新しない。
+run = [
+    "mise upgrade",
+    'mise -C "{{cwd}}" upgrade --local',
+]
 
 [tasks."mise:check"]
 description = "更新可能な mise ツールを表示する（変更は加えない）"
@@ -191,11 +198,11 @@ depends = [
 # ターミナル上で「いま何をしているか」が読み取りやすい。
 #   [1] mise:undeclared                                … 宣言が無いままインストールが残ったツールの検出（報告のみ。brew の貼り替え前に済ませる）
 #   [2] brew:upgrade:run                               … Homebrew 本体と formula / cask の更新
-#   [3] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
+#   [3] mise:upgrade + gh-ext:upgrade + gcloud:upgrade … [tools]（グローバルと呼び出した場所のプロジェクト）・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
 #   [4] textlint:update + agent-skills:update          … mise 管理のツールを使う更新
 #   [5] mise:prune + brew:cask:check → brew:cleanup    … 掃除（mise 側は宣言済みツールだけ。Homebrew 側は Caskroom の破損検査を通ってから）
 [tasks."tools:update"]
-description = "brew・mise ツール・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）"
+description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・textlint を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）"
 depends = [
     "tools:updaters",
     "mise:prune",
