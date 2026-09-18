@@ -22,4 +22,7 @@ full = [
   "https://www.googleapis.com/auth/pubsub",
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/tasks",
+  # Admin SDK Reports API（監査ログ・使用状況レポートの読み取り）。cloud-platform は不要。
+  "https://www.googleapis.com/auth/admin.reports.audit.readonly",
+  "https://www.googleapis.com/auth/admin.reports.usage.readonly",
 ]
