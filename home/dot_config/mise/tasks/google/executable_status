@@ -48,6 +48,5 @@ else
   fi
 fi
 
-printf '\n注記: gcloud は Claude Code の google-cloud-cli MCP（サーバ側実行）を通すため、ローカル gcloud の期限切れは直接使うときだけ関係する。\n'
 printf 'ローカル gcloud の再認証は mise run google:gcloud-login <profile> を実行する。\n'
 printf '再認証が要るときは mise run google:auth <profile> を実行する。\n'

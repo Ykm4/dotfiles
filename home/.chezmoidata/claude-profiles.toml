@@ -111,11 +111,4 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   transport = "http"
   url = "https://developerknowledge.googleapis.com/mcp"
   secretService = "google-dev-knowledge"
-  [[claudeProfiles.hucom-system.mcp]]
-  # Google Cloud の Cloud CLI リモート MCP（gcloud/bq をサーバ側で実行。Preview）。
-  # Claude Code 専用の Desktop 種別 OAuth クライアント（1Password「Google OAuth Client claude-mcp hucom-system」）を使う。gws とは分ける。
-  name = "google-cloud-cli"
-  transport = "http"
-  url = "https://cloudcli.googleapis.com/mcp"
-  oauth = { clientIdEnv = "GOOGLE_MCP_OAUTH_CLIENT_ID_HUCOM_SYSTEM", clientSecretEnv = "GOOGLE_MCP_OAUTH_CLIENT_SECRET_HUCOM_SYSTEM", callbackPort = 8765, scopes = "https://www.googleapis.com/auth/cloud-platform" }
 

@@ -3,7 +3,7 @@
 # gcloud の設定ディレクトリは ~/.config/gcloud/<profile>（CLOUDSDK_CONFIG）で gws と同じ単位に分けている。
 # 資格情報・configuration・ADC がプロファイルごとに独立するので、別プロファイルでのログインが影響しない。
 # 初回は旧共有ストア（~/.config/gcloud 直下）に同名の configuration があれば account と project を引き継ぐ。
-# 普段の gcloud 実行は Claude Code の google-cloud-cli MCP を通し、ここでのログインは直接 gcloud を使うときだけ要る。
+# GCP の操作はローカル gcloud で行うので、このログインがその前提になる。
 #
 # 使い方: mise run google:gcloud-login [profile] [project]
 #   例: mise run google:gcloud-login hucom-system

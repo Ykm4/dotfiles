@@ -4,7 +4,7 @@
 # スコープは ~/.config/gws/<profile>/scopes（1行1スコープ。dotfiles の .chezmoidata/gws-scopes.toml から生成）を
 # --scopes で全量渡す。gws auth login は指定内容でスコープを置換するため、追加するときもファイルに足して再実行する。
 # scopes が無いプロファイル（personal など）は gws の既定（対話選択）で入る。
-# gcloud は Claude Code の google-cloud-cli MCP（Cloud CLI リモート MCP。サーバ側で実行）を通す。ローカル gcloud を直接使うときだけ gcloud auth login が要る。
+# gcloud はこのタスクの対象外で、ローカル gcloud の認証は google:gcloud-login が担う。
 #
 # 使い方: mise run google:auth [profile]
 #   例: mise run google:auth personal
