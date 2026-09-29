@@ -38,22 +38,21 @@ description = "Google Cloud CLI のコンポーネントを更新する（未導
 # python@3.14 は Brewfile・run_after_90-gcloud-install.sh・ここの3か所に書かれる。上げるときは同時に直す。
 wait_for = ["brew:upgrade:run"]
 run = '''
-gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
-gcloud_cli="$gcloud_root/bin/gcloud"
+gcloud_cli="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}/bin/gcloud"
 [ -x "$gcloud_cli" ] || gcloud_cli="$(command -v gcloud || true)"
-if [ -z "$gcloud_cli" ] || [ ! -x "$gcloud_cli" ]; then
+if [ ! -x "$gcloud_cli" ]; then
   echo "SKIP: gcloud CLI が見つからないため更新しない。" >&2
   echo "  導入は chezmoi apply（run_after_90-gcloud-install.sh）が行う。" >&2
   exit 0
 fi
 brew_python=/opt/homebrew/opt/python@3.14/bin/python3.14
 if [ -x "${brew_python}" ]; then
-  CLOUDSDK_PYTHON="${brew_python}" "$gcloud_cli" components update --quiet
+  export CLOUDSDK_PYTHON="${brew_python}"
 else
   echo "WARN: ${brew_python} が無い。CLOUDSDK_PYTHON を固定せず更新する。" >&2
   echo "  components が更新されると sudo による Python 導入が走りうる。" >&2
-  "$gcloud_cli" components update --quiet
 fi
+"$gcloud_cli" components update --quiet
 '''
 
 [tasks."gcloud:check"]
@@ -61,10 +60,9 @@ description = "Google Cloud CLI の全コンポーネントの導入・更新状
 # 所在の解決は gcloud:upgrade とそろえる。片方だけガードすると、更新はスキップされたのに
 # 表示だけ落ちるという食い違いが出る。
 run = '''
-gcloud_root="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}"
-gcloud_cli="$gcloud_root/bin/gcloud"
+gcloud_cli="${GCLOUD_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/google-cloud-sdk}/bin/gcloud"
 [ -x "$gcloud_cli" ] || gcloud_cli="$(command -v gcloud || true)"
-if [ -z "$gcloud_cli" ] || [ ! -x "$gcloud_cli" ]; then
+if [ ! -x "$gcloud_cli" ]; then
   echo "SKIP: gcloud CLI が見つからない。chezmoi apply で導入する。" >&2
   exit 0
 fi

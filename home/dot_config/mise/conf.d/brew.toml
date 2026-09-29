@@ -3,12 +3,14 @@
 # ============================================================
 
 # 内部タスク。破損検査を伴わないので単体では使わない。入口は brew:upgrade。
-# 他タスクから順序制約を張るときも、合成タスクの brew:upgrade ではなくこちらを指すこと。
-# 合成タスクを指すと tools:updaters → brew:upgrade → brew:cask:check → tools:updaters の循環になる。
+# 他タスクから「brew の更新後」の順序制約を張るときは、合成タスクの brew:upgrade ではなくこちらを指すこと。
+# 合成タスクは tools:update の DAG に入らないので、wait_for で指しても待ちが黙って無視され、brew の貼り替えと並走する。
+# depends で指したり、合成タスクを同じ実行に並べたりすると、
+# tools:updaters → brew:upgrade → brew:cask:check → tools:updaters の循環になる。
 [tasks."brew:upgrade:run"]
 hide = true
 # wait_for: mise:undeclared は mise 本体を呼ぶ。brew が /opt/homebrew/bin/mise を unlink → link する窓に
-# 重なると command not found で落ちるため、検出を終えてから貼り替えを始める（mise:upgrade と同じ理由）。
+# 重なると command not found で落ちるため、検出を終えてから貼り替えを始める（mise:upgrade:global と同じ理由）。
 wait_for = ["mise:undeclared"]
 # auto_updates な cask はアプリ自身が更新するため brew では入れ直さない。
 # Homebrew 6.0 から引数なしの brew upgrade が auto_updates cask も対象にするようになったので、明示的に無効化する。

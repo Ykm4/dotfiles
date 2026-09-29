@@ -19,8 +19,8 @@ alias = "skck"
 # 全スキルを最新バージョンに更新（-g でグローバル限定、-y でスコーププロンプトをスキップ）
 [tasks."agent-skills:update"]
 description = "インストール済みの全 agent skills を更新する"
-# wait_for: skills CLI 自体が mise 管理（npm:skills）のため、tools:update では mise:upgrade の完了後に実行する
-wait_for = ["mise:upgrade"]
+# wait_for: skills CLI 自体が mise 管理（npm:skills）のため、tools:update では mise:upgrade:global の完了後に実行する
+wait_for = ["mise:upgrade:global"]
 run = "skills update -g -y"
 alias = "skup"
 

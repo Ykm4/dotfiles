@@ -38,24 +38,16 @@ fi
 # 残ったリンクは mise ls に出ないため上の差集合では拾えない。実体の版ディレクトリを 1 つも持たず
 # リンクだけが残っているツールを、インストールの残骸として報告する。
 installs_dir="${MISE_INSTALLS_DIR:-${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}/installs}"
-# 判定は [ -d ] でリンクを辿って行う。実体のディレクトリだけでなく、mise link で張った有効な
-# リンクも「版がある」と見なすため、link 運用のツールを残骸と誤判定しない。
+# 「版がある」の判定は */ のグロブで行う。*/ はリンクを辿るので、実体のディレクトリだけでなく
+# mise link で張った有効なリンクも版と見なし、link 運用のツールを残骸と誤判定しない。
+# 参照先が無いリンクは find -L の -type l で拾う。-L はリンクを辿るため、-type l が真になるのは
+# 辿れないリンクだけで、ファイルを指す有効なリンクは除かれる。-name '[!.]*' はグロブと同じく隠しファイルを除く。
+shopt -s nullglob
 leftovers=()
 for dir in "${installs_dir}"/*/; do
-  [ -d "${dir}" ] || continue
-  has_version=false
-  has_dangling=false
-  for entry in "${dir}"*; do
-    if [ -d "${entry}" ]; then
-      has_version=true
-      break
-    fi
-    # 参照先が無いリンクだけを候補にする。ファイルを指す有効なリンクは [ -e ] が真なので除く。
-    if [ -L "${entry}" ] && [ ! -e "${entry}" ]; then
-      has_dangling=true
-    fi
-  done
-  if [ "${has_version}" = false ] && [ "${has_dangling}" = true ]; then
+  versions=("${dir}"*/)
+  [ "${#versions[@]}" -eq 0 ] || continue
+  if [ -n "$(find -L "${dir}" -mindepth 1 -maxdepth 1 -name '[!.]*' -type l -print -quit)" ]; then
     leftovers+=("$(basename "${dir}")")
   fi
 done

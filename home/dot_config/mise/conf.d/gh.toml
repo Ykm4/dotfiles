@@ -8,8 +8,7 @@
 # wait_for: tools:update では gh 本体（brew formula）の貼り替え完了後に実行する。
 [tasks."gh-ext:upgrade"]
 description = "gh 拡張をすべて更新する"
-# 合成タスクの brew:upgrade ではなく brew:upgrade:run を指すこと。合成側は brew:cask:check を depends に
-# 持ち、その check は tools:updaters を待つため、そちらを指すと循環になる。
+# 指す先を brew:upgrade:run にする理由は conf.d/brew.toml の brew:upgrade:run のコメントを参照。
 wait_for = ["brew:upgrade:run"]
 run = "gh extension upgrade --all"
 
