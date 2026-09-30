@@ -27,5 +27,8 @@
 
 - Gmail の操作は gws-gmail 系スキルのヘルパー（`+read` `+reply` `+send` など）を使う。
 - 生APIの組み立ては、ヘルパーに無い操作だけに限る。
-- メール送信（`+send` `+reply` `+reply-all` `+forward`、生APIの messages send / drafts send）は、送信直前の文面と宛先をユーザーに提示し、明示の承認を得てから実行する。
+- メールは下書き（`--draft`）までを Claude が作り、送信はユーザーが Gmail で行う。
+- Claude が送信するのは、最終版の文面と宛先に対してユーザーが「送信して」と明示したときだけとする。内容の了承や修正の指示は、送信の承認と扱わない。
+- 修正が入ったら、最終版の文面と宛先を示し直す。
+- 送信系のコマンド（`+send` `+reply` `+reply-all` `+forward`、生APIの messages send / drafts send）は、PreToolUse フック（`_shared/scripts/ask-mail-send.sh`）が確認を出す。
 - 確認プロンプトなしで送信できてしまう経路を見つけたら、使わずにユーザーへ報告する。

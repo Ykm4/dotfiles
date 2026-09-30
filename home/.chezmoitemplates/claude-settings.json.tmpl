@@ -19,6 +19,8 @@
 {{- $notify := "~/.config/claude/_shared/scripts/cmux-notify.sh" -}}
 {{- /* 配備先のプロファイル構成（生成物）への直接編集を拒否し、dotfiles の正本へ誘導する */ -}}
 {{- $denyGenerated := "~/.config/claude/_shared/scripts/deny-generated-config-edit.sh" -}}
+{{- /* gws のメッセージ送信（Gmail・Chat）に確認を求める。ask ルールは先頭一致ですり抜けるため全文を見る */ -}}
+{{- $askMailSend := "~/.config/claude/_shared/scripts/ask-mail-send.sh" -}}
 {{- /* 秘密台帳から sandbox.credentials の deny リストを生成する（2026-08-30 露出インシデント対応）。
       credentials.files は OS サンドボックス（Seatbelt）で Bash とその子の読み取りを拒否し、
       envVars は誤って親環境へ再導入された場合の保険として全秘密変数を unset する。
@@ -71,7 +73,7 @@
         "~/.agents/skills/"
         "~/.config/mise/"))
       "hooks" (dict
-        "PreToolUse" (list (dict "matcher" "Edit|Write|NotebookEdit" "hooks" (list (dict "type" "command" "command" $denyGenerated "timeout" 10))))
+        "PreToolUse" (list (dict "matcher" "Edit|Write|NotebookEdit" "hooks" (list (dict "type" "command" "command" $denyGenerated "timeout" 10))) (dict "matcher" "Bash" "hooks" (list (dict "type" "command" "command" $askMailSend "timeout" 10))))
         "Stop" (list (dict "matcher" "" "hooks" (list (dict "type" "command" "command" $notify "timeout" 10))))
         "Notification" (list (dict "matcher" "permission_prompt" "hooks" (list (dict "type" "command" "command" $notify "timeout" 10)))))
       "statusLine" (dict "type" "command" "command" "bun run ~/.config/claude/_shared/statusline.ts" "padding" 2)
