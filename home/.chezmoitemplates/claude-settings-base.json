@@ -126,7 +126,11 @@
       "Bash(agent-browser set credentials *)",
       "Bash(docker compose exec *)",
       "Bash(brew services stop *)",
-      "Bash(brew services restart *)"
+      "Bash(brew services restart *)",
+      "Bash(gws gmail +send*)",
+      "Bash(gws gmail +reply*)",
+      "Bash(gws gmail +forward*)",
+      "Bash(gws gmail users * send*)"
     ],
     "defaultMode": "auto"
   },

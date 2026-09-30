@@ -30,5 +30,5 @@
 - メールは下書き（`--draft`）までを Claude が作り、送信はユーザーが Gmail で行う。
 - Claude が送信するのは、最終版の文面と宛先に対してユーザーが「送信して」と明示したときだけとする。内容の了承や修正の指示は、送信の承認と扱わない。
 - 修正が入ったら、最終版の文面と宛先を示し直す。
-- 送信系のコマンド（`+send` `+reply` `+reply-all` `+forward`、生APIの messages send / drafts send）は、PreToolUse フック（`_shared/scripts/ask-mail-send.sh`）が確認を出す。
+- 送信系のコマンド（`+send` `+reply` `+reply-all` `+forward`、生APIの messages send / drafts send）は、permissions の ask ルールが確認を出す。`--draft` を付けた下書きの作成も同じルールにかかる。
 - 確認プロンプトなしで送信できてしまう経路を見つけたら、使わずにユーザーへ報告する。
