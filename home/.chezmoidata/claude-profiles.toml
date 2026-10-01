@@ -90,11 +90,19 @@ excludeSkills = ["agents-sdk", "durable-objects", "wrangler", "mf-expense"]
   kind = "github"
   repo = "cloudflare/skills"
   autoUpdate = true
+  [[claudeProfiles.hucom-system.marketplaces]]
+  name = "ponytail"
+  kind = "github"
+  repo = "DietrichGebert/ponytail"
+  autoUpdate = true
   [[claudeProfiles.hucom-system.plugins]]
   id = "slack@claude-plugins-official"
   enabled = true
   [[claudeProfiles.hucom-system.plugins]]
   id = "cloudflare@cloudflare"
+  enabled = true
+  [[claudeProfiles.hucom-system.plugins]]
+  id = "ponytail@ponytail"
   enabled = true
   [[claudeProfiles.hucom-system.mcp]]
   name = "context7"
