@@ -1,0 +1,6 @@
+{
+  "name": "mermaid-image",
+  "version": "0.1.0",
+  "description": "返答中の ```mermaid ブロックを PNG にしてターミナルに画像で表示する",
+  "types": "./types/index.d.ts"
+}
