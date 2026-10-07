@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+#MISE description="direnv が zsh のプロンプト表示時（precmd）に .envrc を読み込むかを、インストール済みの版と mise から見た最新版で実際に検査する（報告のみ）"
+#MISE wait_for=["mise:upgrade:global"]
+# 経緯と、固定を外す手順は config.toml の [tools] の direnv のコメントにある。
+# 固定中は最新版で不具合が直ったか（固定を外せるか）を判定し、固定を外した後は更新による退行を検知する。
+# 判定は上流のソースや変更履歴を読まず、実物のバイナリを動かして行う。
+# 上流の直し方（判定の書き換えや関数の分割など）に左右されずに判定するためである。
+# 検査は使い捨てのディレクトリだけで行い、利用者の allow の記録・direnv の設定・シェルの設定・mise のインストール先には触れない。
+# どの結果でも終了コードは 0 にし、問題は「警告:」で始まる出力で知らせる。
+# mise は既定で、失敗したタスクと並走中のタスクを止めるため、報告だけのタスクの失敗で tools:update の更新を中断させないためである。
+#
+# wait_for: tools:update では、グローバルの [tools] の更新が終わってから検査する。
+# 固定を外した後は mise:upgrade:global が direnv を上げうるので、上がった後の版を検査対象にする。
+# mise:upgrade:global は brew:upgrade:run を待つので、mise 本体の貼り替えとも重ならない。
+set -uo pipefail
+
+warn_exit() {
+  echo "警告: $*" >&2
+  exit 0
+}
+
+work="$(mktemp -d)" || warn_exit "一時ディレクトリを作れなかった。"
+trap 'rm -rf "${work}"' EXIT
+
+# 引数のバイナリの zsh フックだけを読み込んだ対話シェルを、.envrc のあるディレクトリで直接起動する。
+# 一度も cd しないので、.envrc を読み込みうるのはプロンプト表示前の precmd だけになる。
+# 標準入力がパイプでも、対話シェル（-i）はコマンドを読む前に precmd を呼ぶ（呼び出し時の ZSH_EVAL_CONTEXT も端末のときと同じ shfunc）。
+# ただし zle は動かないので、上流が zle のフックで読み込むように変えた場合は「読み込まない」と判定される。
+# 読み込まれたら 0、読み込まれなければ 1、検査そのものが成り立たなければ 2 を返す。
+probe() {
+  local bin="$1" dir out
+  dir="$(mktemp -d "${work}/probe.XXXXXX")" || return 2
+  mkdir -p "${dir}/project" "${dir}/home" || return 2
+  printf 'export DIRENV_PRECMD_PROBE=loaded\n' >"${dir}/project/.envrc" || return 2
+  printf 'eval "$(%q hook zsh)"\n' "${bin}" >"${dir}/home/.zshrc" || return 2
+  # HOME を使い捨ての場所に向けるので、allow の記録も direnv の設定もそこに閉じる。
+  # 利用者の環境変数を持ち込まないよう、env -i で必要なものだけを渡す。
+  local -a env_vars=("HOME=${dir}/home" "PATH=/usr/bin:/bin" "TERM=dumb")
+  env -i "${env_vars[@]}" "${bin}" allow "${dir}/project" >/dev/null 2>&1 || return 2
+  # -d で /etc/zshrc などの全体設定を読まず、フック以外の要素を除く。
+  out="$(
+    cd "${dir}/project" &&
+      printf '%s\n' 'print -r -- "PROBE:${DIRENV_PRECMD_PROBE:-none}:END"' exit |
+      env -i "${env_vars[@]}" /bin/zsh -d -i 2>/dev/null
+  )"
+  case "${out}" in
+    *PROBE:loaded:END*) return 0 ;;
+    *PROBE:none:END*) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+installed_bin="$(mise which direnv)" ||
+  warn_exit "mise で入れた direnv が見つからない。config.toml の [tools] を確認すること。"
+{ installed="$(mise tool direnv --active)" && requested="$(mise tool direnv --requested)"; } ||
+  warn_exit "mise tool から direnv の版を読み取れなかった。"
+# 固定を外したときに mise が入れる版と同じ版を、最新版として扱う。
+latest="$(mise latest direnv)" ||
+  warn_exit "mise から direnv の最新版を取得できなかった。"
+pinned=true
+[ "${requested}" = "latest" ] && pinned=false
+
+# 先にインストール済みの版を検査する。
+# 固定中はこれが対照になり、読み込まれなければ検査の手段の側が壊れていると判断できる。
+probe "${installed_bin}"
+case $? in
+  0) ;;
+  1)
+    [ "${pinned}" = true ] &&
+      warn_exit "固定中の direnv ${installed} でも .envrc が読み込まれなかった。検査の手段が壊れている可能性がある。"
+    warn_exit "インストール済みの direnv ${installed} は、プロンプト表示時に .envrc を読み込まない。2026-10-07 と同じ種類の退行なので、config.toml の [tools] で読み込める版に固定すること。"
+    ;;
+  *) warn_exit "direnv ${installed} の検査を実行できなかった。" ;;
+esac
+
+if [ "${installed}" = "${latest}" ]; then
+  if [ "${pinned}" = true ]; then
+    echo "mise から見た direnv の最新版は、固定中の ${installed} と同じである。"
+  else
+    echo "direnv ${installed}（最新）で、プロンプト表示時に .envrc が読み込まれることを確認した。"
+  fi
+  exit 0
+fi
+
+# 最新版は、固定を外したときと同じ経路（aqua backend とそのチェックサム検証）で使い捨ての場所へ入れる。
+# データ・キャッシュ・状態の 3 つをまとめて差し替え、利用者のインストール先と shim に触れないようにする。
+mise_tmp=(env "MISE_DATA_DIR=${work}/mise/data" "MISE_CACHE_DIR=${work}/mise/cache" "MISE_STATE_DIR=${work}/mise/state")
+"${mise_tmp[@]}" mise install --quiet "direnv@${latest}" >/dev/null 2>&1 &&
+  latest_bin="$("${mise_tmp[@]}" mise which direnv --tool "direnv@${latest}")" ||
+  warn_exit "direnv ${latest} を使い捨ての場所へ入れられなかった。"
+
+probe "${latest_bin}"
+case $? in
+  0)
+    if [ "${pinned}" = true ]; then
+      echo "direnv ${latest} では、プロンプト表示時に .envrc が読み込まれる。固定を外せる（手順は config.toml の [tools] の direnv のコメント）。"
+    else
+      echo "direnv ${installed} と最新の ${latest} の両方で、プロンプト表示時に .envrc が読み込まれることを確認した。"
+    fi
+    ;;
+  1)
+    if [ "${pinned}" = true ]; then
+      echo "direnv ${latest} は、まだプロンプト表示時に .envrc を読み込まない。${requested} への固定を続ける。"
+    else
+      warn_exit "最新の direnv ${latest} は、プロンプト表示時に .envrc を読み込まない。更新で退行が入るので、config.toml の [tools] で direnv を ${installed} に固定すること。"
+    fi
+    ;;
+  *) warn_exit "direnv ${latest} の検査を実行できなかった。" ;;
+esac

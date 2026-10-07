@@ -4,6 +4,10 @@ tap "homebrew/services"
 tap "manaflow-ai/cmux", trusted: { casks: ["cmux"] }
 # Run your GitHub Actions locally
 brew "act"
+# Bourne-Again SHell, a UNIX command interpreter
+# 以前は direnv の依存として入っていた。
+# 2026-10-07 に direnv を mise へ移したとき brew autoremove で消えたため、#!/usr/bin/env bash のスクリプトが使ってきた版を保つよう明示する。
+brew "bash"
 # Clone of cat(1) with syntax highlighting and Git integration
 brew "bat"
 # Manage your dotfiles across multiple diverse machines, securely
@@ -16,8 +20,6 @@ brew "d2"
 brew "deno"
 # Tool for testing and debugging Dependabot update jobs
 brew "dependabot"
-# Load/unload environment variables based on $PWD
-brew "direnv"
 # Pack, ship and run any application as a lightweight container
 brew "docker"
 # Docker CLI plugin for extended build capabilities with BuildKit

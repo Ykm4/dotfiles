@@ -110,6 +110,22 @@ python = { version = "3.13", postinstall = "python -m pip install --upgrade play
 # secrets ヘルパーは SIP 保護下の /usr/bin/jq に固定しており、本項の変更に影響されない。
 jq = "latest"
 
+# @see https://github.com/direnv/direnv
+# 2026-10-07 から 2.37.1 に固定している。
+# 2.38.0 の PR #1583「ZSH chpwd hook」で、_direnv_hook に「ZSH_EVAL_CONTEXT が toplevel で始まる呼び出しだけを処理する」判定が入った。
+# この関数は chpwd だけでなく precmd にも登録される。
+# precmd から呼ばれたときの ZSH_EVAL_CONTEXT は shfunc なので、プロンプト表示時の読み込みが常に止まる。
+# その結果、.envrc のあるディレクトリで直接開いたシェルでは、cd するまで .envrc が読み込まれない。
+# 素の zsh 5.9（zsh -f）でも再現し、公式の設定方法も 2.38 で「.zshrc の末尾に eval "$(direnv hook zsh)"」のままなので、設定の書き方では避けられない。
+# 2026-10-07 に brew upgrade で 2.38.1 へ上がった直後、cmux の新しいタブで起動した Claude Code が CLAUDE_CONFIG_DIR を受け取れず、取引先の作業が client ではなく personal プロファイルで動いた。
+# 同日に、プロファイルの注入は direnv の .envrc から mise の [env] へ移した（docs/runbooks/claude-multi-profile.md の手順4）。
+# direnv 自体は、取引先のチームのスクリプトが環境ごとの .envrc で使うので残す。
+# Homebrew では旧版を入れられないため、brew の formula は 2026-10-07 に Brewfile から外し、mise（aqua backend）で版を固定する。
+# 固定を外してよいかは、tools:update から毎回呼ばれる direnv:check が、mise から見た最新版で実際に検査して知らせる。
+# 「固定を外せる」と出たら "latest" に戻し、この段落の固定理由を削除する。
+# direnv:check は、固定を外した後も更新時の退行の検知に使うので残す。
+direnv = "2.37.1"
+
 # ============================================================
 # Go関連ツール
 # ============================================================
@@ -226,12 +242,14 @@ depends = [
 #   [3] mise:upgrade:global + gh-ext:upgrade + gcloud:upgrade … グローバルの [tools]・gh 拡張・gcloud components の更新（brew の貼り替え完了後）
 #   [4] textlint:update + agent-skills:update + playwright:update + mise:upgrade:local
 #                                                           … mise 管理のツールを使う更新と、呼び出した場所のプロジェクト設定の [tools] の更新
+#       direnv:check                                        … direnv の .envrc 読み込みの検査（報告のみ。固定を外せるかと、更新による退行を知らせる）
 #   [5] mise:prune + brew:cask:check → brew:cleanup         … 掃除（mise 側は宣言済みツールだけ。Homebrew 側は Caskroom の破損検査を通ってから）
 [tasks."tools:update"]
-description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・gcloud components・textlint・Python 版 playwright を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）"
+description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・gcloud components・textlint・Python 版 playwright を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）。あわせて direnv の .envrc 読み込みを検査する"
 depends = [
     "tools:updaters",
     "mise:prune",
     "brew:cleanup",
     "mise:undeclared",
+    "direnv:check",
 ]
