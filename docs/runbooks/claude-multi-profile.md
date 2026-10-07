@@ -30,7 +30,9 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 3. `chezmoi apply ~/.config/claude-profile-config` で生成し、
    `mise run claude:install-profiles -- <名前>` → `mise run claude:sync-links`。
    新設プロファイルだけなら Claude を終了せずに配置できる。
-4. 対象ディレクトリの mise か direnv に `CLAUDE_CONFIG_DIR` を注入する。
+4. 対象ディレクトリの mise.toml の `[env]` に `CLAUDE_CONFIG_DIR` を書く。
+   direnv の `.envrc` には書かない。direnv の注入はプロンプト表示時のフックに頼るため、
+   2026-10-07 に direnv 2.38 のフックの不具合で、新しいタブで起動した Claude が personal で動いた。
 
 取引先は1社ごとにプロファイルを増やす（1社目は `client`。増えたら別の中立名を足し、
 既存は改名しない）。取引先プロファイルの宣言は手順1の場所ではなく、client-dotfiles の
@@ -118,7 +120,7 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 
 ```bash
 mise x -C <dir> -- sh -c 'echo $CLAUDE_CONFIG_DIR'   # mise の注入を確認
-direnv exec <dir> sh -c 'echo $CLAUDE_CONFIG_DIR'    # direnv の注入を確認
+(cd <dir> && zsh -i -c 'echo $CLAUDE_CONFIG_DIR')   # 新しく開いたシェルでの注入を確認（.zshrc を通す）
 CLAUDE_CONFIG_DIR=<dir> claude auth status            # プロファイルの認証を確認
 env -u CLAUDE_CONFIG_DIR claude auth status           # personal の認証を確認
 ```
@@ -145,8 +147,8 @@ env -u CLAUDE_CONFIG_DIR claude auth status           # personal の認証を確
 7. `mise run claude:install-profiles` で構成を実プロファイルへ配置する
    （`_private/profile-overlays/` もここでマージされる）
 8. `mise run claude:sync-links` でスキルを配る
-9. `mise trust` と `direnv allow` を実行する
-10. 取引先ディレクトリの配置物（envrc・mise.toml・settings.local.json）は
+9. `mise trust` を実行する
+10. 取引先ディレクトリの配置物（mise.toml・settings.local.json）は
     手順4の `chezmoi apply` が submodule 経由で配る。追加の手作業は不要
 11. 各プロファイルで `/login` する
 12. `mise run claude:restore` を実行する
