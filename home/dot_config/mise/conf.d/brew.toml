@@ -75,6 +75,9 @@ fi
 [tasks."brew:cleanup"]
 description = "不要になった formula を削除し、古いバージョンとキャッシュを消す"
 # autoremove は依存として入ったが不要になった formula を削除する。
+# .zshenv の HOMEBREW_NO_AUTOREMOVE で brew uninstall と brew cleanup による自動の削除を止めているので、削除はここに集まる。
+# 消える formula を後から追えるよう、削除の前に --dry-run で一覧を出す。
+# 依存として入っただけの formula をスクリプトなどが直接使っているなら、一覧で気づいた時点で Brewfile に宣言する（2026-10-07 の bash と同じ対応）。
 # cleanup はその formula の古いバージョンとキャッシュを消すため、必ず autoremove の後に実行する。
 # この2つは並列化してはいけない。順序を崩すと削除済み formula のキャッシュが残る。
 # depends: 破損検査を通ってから掃除する。実行順序の制約は brew:cask:check 側の wait_for に集約している。
@@ -91,6 +94,7 @@ description = "不要になった formula を削除し、古いバージョン�
 depends = ["brew:cask:check"]
 run = [
     "brew doctor --quiet {{vars.cask_check}}",
+    "brew autoremove --dry-run",
     "brew autoremove",
     "brew cleanup",
 ]
