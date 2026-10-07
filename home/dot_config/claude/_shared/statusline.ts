@@ -73,12 +73,48 @@ const gitBranch = (() => {
   }
 })();
 
+// Claude Code profile: basename of CLAUDE_CONFIG_DIR (unset means personal).
+// Since 2026-10-07 every profile is injected by mise [env], so the profile expected for cwd is whatever `mise env` sets.
+// A mismatch means the session started without the injection (e.g. a shell hook did not run), so it is shown as a warning.
+// The expected profile is cached per workspace for 60 seconds; an empty value means unknown and shows no warning.
+const profileOf = (configDir: string | undefined): string => {
+  const dir = configDir?.replace(/\/+$/, "");
+  if (!dir || dir === `${process.env.HOME}/.claude`) return "personal";
+  return dir.split("/").pop() || dir;
+};
+const profile = profileOf(process.env.CLAUDE_CONFIG_DIR);
+
+const PROFILE_CACHE_FILE = `/tmp/statusline-profile-${cwdHash}`;
+const PROFILE_CACHE_MAX_AGE = 60_000;
+
+const expectedProfile = (() => {
+  try {
+    const stat = statSync(PROFILE_CACHE_FILE);
+    if (Date.now() - stat.mtimeMs < PROFILE_CACHE_MAX_AGE) {
+      return readFileSync(PROFILE_CACHE_FILE, "utf-8").trim();
+    }
+  } catch {}
+
+  try {
+    const proc = Bun.spawnSync(["mise", "env", "--json"], { cwd, stderr: "ignore" });
+    if (proc.exitCode !== 0) return "";
+    const expected = profileOf(JSON.parse(proc.stdout.toString()).CLAUDE_CONFIG_DIR);
+    Bun.write(PROFILE_CACHE_FILE, expected);
+    return expected;
+  } catch {
+    return "";
+  }
+})();
+
 const dir = cwd.split("/").pop() ?? "";
 
-// --- Line 1: ⏰ datetime | 📁 directory | 🌿 branch | 🤖 agent | [model] ---
+// --- Line 1: ⏰ datetime | 📁 directory | 👤 profile | 🌿 branch | 🤖 agent | [model] ---
+const profilePart = expectedProfile && expectedProfile !== profile
+  ? `${SEP}👤 ${RED}${profile} (expected: ${expectedProfile})${RST}`
+  : `${SEP}👤 ${profile}`;
 const branchPart = gitBranch ? `${SEP}🌿 ${gitBranch}` : "";
 const agentPart = agentName ? `${SEP}🤖 ${agentName}` : "";
-const line1 = `⏰ ${formatJST(Date.now(), true)}${SEP}📁 ${dir}${branchPart}${agentPart}${SEP}${CYAN}[${model}]${RST}`;
+const line1 = `⏰ ${formatJST(Date.now(), true)}${SEP}📁 ${dir}${profilePart}${branchPart}${agentPart}${SEP}${CYAN}[${model}]${RST}`;
 
 // --- Line 2: context window usage | 5-hour rate limit usage (reset time) ---
 const resetPart = fiveHReset ? ` ${DIM}(reset ${formatJST(fiveHReset * 1000)})${RST}` : "";
