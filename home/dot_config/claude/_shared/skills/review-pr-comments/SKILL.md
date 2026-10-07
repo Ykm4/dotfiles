@@ -1,6 +1,6 @@
 ---
 name: review-pr-comments
-description: PR の未解決レビューコメントを取得して処理するスキル。Copilot からの inline コメントは判断→自動修正→検証まで行い、commit / push / resolve / hide はユーザーの明示指示後に実行する。Copilot が投稿せず review 本文へ畳んだ suppressed comments も対象にし、thread が無く resolve できないため hide（minimizeComment）で畳む。人間からの inline コメントは対応方針を提示するのみで自動修正は行わない。`/review-pr-comments [PR番号]` で起動し、引数省略時は current branch から PR を自動特定する。「PRレビュー対応」「Copilot コメント対応」「レビューコメント確認」「未解決コメント」「PR コメント」「suppressed comments」と言われたとき、または PR レビュー対応を始めるときに使用する。
+description: PR の未解決レビューコメントを取得して処理するスキル。Copilot からの inline コメントは判断→自動修正→検証まで行い、commit / push / resolve / hide はユーザーの明示指示後に実行する。Copilot が投稿せず review 本文へ畳んだ suppressed comments も対象にし、thread が無く resolve できないため hide（minimizeComment）で畳む。全 thread を resolve した Copilot の review 本文（Copilot review overview）も Resolved として hide する。人間からの inline コメントは対応方針を提示するのみで自動修正は行わない。`/review-pr-comments [PR番号]` で起動し、引数省略時は current branch から PR を自動特定する。「PRレビュー対応」「Copilot コメント対応」「レビューコメント確認」「未解決コメント」「PR コメント」「suppressed comments」と言われたとき、または PR レビュー対応を始めるときに使用する。
 allowed-tools:
   - Bash(gh *)
   - Bash(mise *)
@@ -40,6 +40,7 @@ GitHub PRの未解決inline reviewコメントと、Copilotがreview本文へ畳
   - review本文のmarkdownを直接解析しないと取得できない。`gh pr view --json reviews`や`reviewThreads`の取得では得られない。
 - **未解決スレッドのみ**を処理する（`isResolved == true`のスレッドは無視）。
 - **hide 済みの review は無視する**（`isMinimized == true`）。
+- **Copilot の review 本文（Copilot review overview）も畳む**。threadをresolveしても本文はPRの会話欄に残るため、その review の全threadが「対応した」か「対応不要」でresolve済みになったら、`minimizeComment`（GitHub UIのHide comment、理由はResolved）で本文を畳む。push backが1件でも残る review は畳まない。人間の review 本文は畳まない。
 - **outdated スレッドの扱い**: 既に該当箇所が変更されたスレッドも、未解決なら対象に含める。判断ロジックで「対応不要」となればコード修正はせずresolve対象として扱う（実際のresolveはStep 8でユーザー指示後に実行する）。
 - **スレッド返信は不要**。コメント内容に対する文章での返信は行わない。
 - **gh コマンドのオプション差分**: 本スキルが利用する`gh api graphql`/`gh pr view`/`gh repo view`は枯れたAPIなのでハードコーディング前提。万一`unrecognized flag`等のエラーが出たら、該当サブコマンドを`gh <subcommand> --help`で確認して現行オプションに合わせて再実行する。
@@ -129,6 +130,20 @@ SUPPRESSED="$(${CLAUDE_SKILL_DIR}/scripts/fetch-suppressed-comments.sh "$OWNER" 
 
 `TARGET_COMMENT_DB_ID`（`#discussion_r...`指定）がある場合は、特定のthreadを指しているのでsuppressed commentsは対象にしない。
 
+**Copilot review 本文**
+
+```bash
+REVIEWS="$(${CLAUDE_SKILL_DIR}/scripts/fetch-copilot-reviews.sh "$OWNER" "$NAME" "$PR_NUMBER")"
+```
+
+返り値は`[{ kind, id, databaseId, author, url, submittedAt, state, inlineCommentCount, unresolvedThreadCount, hasSuppressed }]`のJSON配列。`kind`は`"review"`。
+
+- `id`はreviewのGraphQL node ID（`PRR_...`）で、Step 8のhideに使う。threadの`PRRT_...`と取り違えない。
+- `unresolvedThreadCount`は、そのreviewのinlineコメントを先頭に持つ未解決threadの数。Step 8でresolveしたあと再取得し、0になったreviewをhideの候補にする。
+- `hasSuppressed`が`true`のreviewはsuppressed commentsも持つ。suppressed側の判定（Step 5a）が全件「対応した」か「対応不要」になるまでhideしない。
+- 既にhide済み（`isMinimized == true`）のreviewと、authorがCopilotでないreviewは除外される。
+- `TARGET_COMMENT_DB_ID`指定のときも取得する。対象threadのresolve後にそのreviewの`unresolvedThreadCount`が0になれば、本文を畳む対象になる。
+
 ### Step 3: 仕分け
 
 各スレッドの**最初のコメントの投稿者**で判定する。
@@ -216,6 +231,7 @@ Copilot自動修正がある場合は、ここで次を提示して**停止す�
 
 - 適用した修正の一覧（1コメント = 1行、対象`file:line`と修正概要）
 - suppressed commentsの判定一覧（review単位で、hide可否とその理由）
+- hide予定のCopilot review本文の一覧（resolve後に全threadが解決になるreview）
 - typecheck/lintの結果（PASS/FAIL）
 - commit/push/resolve/hideはユーザーの指示後に実行する旨
 
@@ -247,15 +263,22 @@ for tid in $THREAD_IDS; do
   ${CLAUDE_SKILL_DIR}/scripts/resolve-thread.sh "$tid"
 done
 
-# 3. hide（suppressed comments を持つ Copilot review のうち、
-#    全指摘が「対応した」か「対応不要」になったものだけ）
+# 3. hide（Copilot review 本文）
+#    resolve 後に再取得し、unresolvedThreadCount が 0 の review を畳む。
+#    push back を含む review と、suppressed comments に未対応が残る review は
+#    $EXCLUDED_REVIEW_IDS に入れて除外する。
+REVIEW_NODE_IDS="$(${CLAUDE_SKILL_DIR}/scripts/fetch-copilot-reviews.sh "$OWNER" "$NAME" "$PR_NUMBER" \
+  | jq -r '.[] | select(.unresolvedThreadCount == 0) | .id')"
 for rid in $REVIEW_NODE_IDS; do
-  ${CLAUDE_SKILL_DIR}/scripts/hide-review.sh "$rid"
+  case " $EXCLUDED_REVIEW_IDS " in *" $rid "*) continue ;; esac
+  ${CLAUDE_SKILL_DIR}/scripts/hide-review.sh "$rid" RESOLVED
 done
 ```
 
 - 箇条書きはStep 5aで保持した「対応した」スレッドの修正内容から生成する。
 - resolveとhideは1件ずつのコマンドだが、**ループで1回のBash呼び出しにまとめる**。1件ごとにツールを呼び分けると往復が件数分積み上がる。
+- hideの対象は、inline threadの有無にかかわらずCopilotが投稿した全review本文（overviewだけのreviewも含む）。resolveを先に実行してから`fetch-copilot-reviews.sh`を再取得しないと、`unresolvedThreadCount`がresolve前の値のままになり畳めない。
+- `#discussion_r...`で1threadだけを対象にした場合も、resolve後にそのreviewの`unresolvedThreadCount`が0ならhideする。他のthreadが未解決のreviewはhideしない。
 - `hide-review.sh`は`<review_node_id>`の次の引数で`classifier`を指定でき、既定は`RESOLVED`。指定できる値はGitHub UIのプルダウンと同じ`SPAM`・`ABUSE`・`OFF_TOPIC`・`OUTDATED`・`DUPLICATE`・`RESOLVED`・`LOW_QUALITY`。
 - `hide-review.sh`は実行前にnodeの型とauthorを確認し、`PullRequestReview`でない場合とauthorがCopilotでない場合はexit 65で拒否する。
 - 取り消しは`${CLAUDE_SKILL_DIR}/scripts/hide-review.sh --undo "$REVIEW_NODE_ID"`。hideしたあとに判断が変わったらこれで戻す。
@@ -271,6 +294,10 @@ done
 - 自動修正: N 件
 - resolve のみ（対応不要判断）: N 件
 - push back（要追加判断）: N 件
+
+### Copilot（review 本文）
+- hide: N review — 未実施（承認待ち） / 実施済み
+- hide 対象外（未解決 thread または push back が残る）: N review
 
 ### Copilot（suppressed comments）
 - 対象 review: N 件（指摘 N 件）
@@ -298,7 +325,8 @@ done
 - **resolve は Copilot スレッドのみ**。人間スレッドは絶対にresolveしない。
 - **hide は Copilot の review のみ**。人間のreview本文は絶対にhideしない。
 - **`hide-review.sh`の`--force`は使わない**。authorがCopilotでないとき、スクリプトは拒否してエラーメッセージで`--force`を案内する。この案内には従わず、ユーザーへ報告して停止する。
-- **hide は review 単位で効く**。1つのreviewに複数のsuppressed commentsがあるとき、未対応やpush backが1件でも残るならhideしない（未対応分まで畳まれるため）。
+- **hide は review 単位で効く**。1つのreviewに複数のthreadやsuppressed commentsがあるとき、未対応やpush backが1件でも残るならhideしない（未対応分まで畳まれるため）。
+- **hide の理由は RESOLVED**。対応済み・対応不要のreview本文を畳む用途なので、`OUTDATED`等の他の分類は使わない。
 - **suppressed comments に resolve を試みない**。threadが存在せず`resolveReviewThread`に渡すIDが無いので必ず失敗する。
 - **コミット粒度は Copilot 全件で 1 コミット**。コメントごとに分割しない。
 - **typecheck / lint 失敗時は commit / push / resolve / hide を一切行わない**。エラー内容をそのままユーザーに報告して停止する。
