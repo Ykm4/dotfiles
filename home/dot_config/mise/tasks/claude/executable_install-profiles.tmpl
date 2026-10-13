@@ -25,12 +25,12 @@ PROTECTED_DIRS=(plugins projects sessions session-env backups cache)
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 exists() { [ -e "$1" ] || [ -L "$1" ]; }
 
-# 引数でプロファイルを絞り込める（例: mise run claude:install-profiles -- client）。
+# 引数でプロファイルを絞り込める（例: mise claude:install-profiles -- client）。
 # 無指定なら全プロファイルを対象にする。絞り込み時は Claude の全終了を要求せず、
 # 対象プロファイル配下を開いているプロセスが無いことだけを検査する。
 # explicitEnv=false のプロファイルは状態ファイル（~/.claude.json）がプロファイル外に
 # あり使用中を検査しきれないため、全体実行（引数なし）でのみ差し替える。
-# --check は検査モード（例: mise run claude:install-profiles -- --check）。
+# --check は検査モード（例: mise claude:install-profiles -- --check）。
 # 生成元から staging を組み立てて配備先と比較するだけで、何も変更しない。
 # Claude 起動中でも実行でき、差分があれば非ゼロで終了する。
 CHECK=0
@@ -294,7 +294,7 @@ install_profile() {
     /bin/mv "$dst/skills" "$backup/skills"
     ROLLBACK_LOG+=("$dst/skills"$'\t'"$backup/skills")
     install -d -m 700 "$dst/skills"
-    echo "[$name] skills を実ディレクトリへ変換した。mise run claude:sync-links を実行すること"
+    echo "[$name] skills を実ディレクトリへ変換した。mise claude:sync-links を実行すること"
   fi
 
   fingerprint "$explicit" "$dst" >"$backup/protected.after"

@@ -24,7 +24,7 @@ chezmoi apply                                                # [3] 再適用で�
 
 ## 管理対象
 
-- Homebrew（`~/.Brewfile`）— formula・cask一式（1Passwordアプリ・CLIを含む）。手宣言で管理し`brew bundle dump`は使わない（乖離確認は`mise r brewfile:audit`）
+- Homebrew（`~/.Brewfile`）— formula・cask一式（1Passwordアプリ・CLIを含む）。手宣言で管理し`brew bundle dump`は使わない（乖離確認は`mise brewfile:audit`）
 - zsh設定（`.zshrc`/`.zprofile`/`.zshenv`）
 - git設定（`.gitconfig`・`git/allowed_signers`・`git/ignore`）— コミット署名は1PasswordのSSHエージェント経由
 - gh（GitHub CLI）設定（`gh/private_config.yml`）
@@ -32,12 +32,12 @@ chezmoi apply                                                # [3] 再適用で�
 - 1Password SSHエージェントの鍵許可リスト（`1Password/ssh/agent.toml`）— エージェントに載せる鍵をここで明示的に絞る。取引先の鍵はitem名・vault名が識別子にあたるため1Passwordから注入。
 - 取引先踏み台向けSSH設定（`.ssh/config.local`）と公開鍵（`.ssh/partner-*.pub`）— 値は1Passwordから注入。秘密鍵はSSH Keyアイテムとしてエージェントが保持し、ディスクには置かない。`IdentityFile`には公開鍵を指定し`IdentitiesOnly yes`を維持する（外すとエージェント上の全鍵を順に提示するため`MaxAuthTries`に達し、無関係な鍵をサーバへ送ることになる）。既存鍵の取り込みは`op`では行えず1Passwordアプリからインポートする。
 - ghostty・starship・mise・duti・bat・direnvの各設定
-- Finicky設定（`~/.finicky.js`）— リンクを対応表に従いブラウザ・プロファイルへ振り分け、Slack/Zoom/Teamsはdeep linkでアプリ起動（既定はArc）。取引先の識別子（プロファイル名・ドメイン・GCPプロジェクト）は1Passwordから注入。検証は`mise r finicky:verify`（dry-runでブラウザを開かずに全経路を確認する）。
+- Finicky設定（`~/.finicky.js`）— リンクを対応表に従いブラウザ・プロファイルへ振り分け、Slack/Zoom/Teamsはdeep linkでアプリ起動（既定はArc）。取引先の識別子（プロファイル名・ドメイン・GCPプロジェクト）は1Passwordから注入。検証は`mise finicky:verify`（dry-runでブラウザを開かずに全経路を確認する）。
 - cmux設定（`~/.config/cmux/cmux.json`）— ターミナル内`open`の横取りを無効化しFinicky経由に統一。変更後は`cmux reload-config`で反映
 - lazygit設定（`~/.config/lazygit/config.yml`）— macOSの既定パスは`~/Library/Application Support`のため`.zshenv`の`LG_CONFIG_FILE`でXDGパスを参照させる
 - Codex CLI設定の雛形（`~/.codex/config.toml`）— `create_`方式で初回のみ生成。以後はCodex自身がtrust情報等を追記するため管理外で育てる（取引先パス・取引先MCPは雛形に含めない）
 - gcloudのconfigurationファイル（`hucom-system`・`personal`の2プロファイル。account・projectの値は1Passwordから注入）
-- gcloud SDK本体の導入（`.chezmoiscripts/run_after_90-gcloud-install.sh`）— Google公式archiveから導入する。展開先は`~/.local/share/google-cloud-sdk`。更新は`mise r gcloud:upgrade`が担う。Homebrewのcaskを使わない理由と運用は`docs/runbooks/gcloud-cli-installation.md`にある。
+- gcloud SDK本体の導入（`.chezmoiscripts/run_after_90-gcloud-install.sh`）— Google公式archiveから導入する。展開先は`~/.local/share/google-cloud-sdk`。更新は`mise gcloud:upgrade`が担う。Homebrewのcaskを使わない理由と運用は`docs/runbooks/gcloud-cli-installation.md`にある。
 - Google Workspace APIのclient secretテンプレート（`hucom-system`・`personal`の2プロファイル分。値は1Passwordから注入）
 - miseのsecrets（`~/.config/mise/conf.d/secrets.toml`。APIキーと取引先envパスの値は1Passwordから注入）
 - Claude Codeのユーザー設定（`~/.claude`のsettings.json・keybindings・statusline・rules・scripts・公開可能なskills）。settings.jsonの`enabledPlugins`がプラグインの宣言、userスコープMCPは`run_onchange`スクリプトで登録する。
@@ -46,7 +46,7 @@ chezmoi apply                                                # [3] 再適用で�
 
 新マシンでの`chezmoi apply`完了後、次を手動で行う。
 
-- `gh auth login`と、プロファイルごとの`mise run google:auth <profile>`を実行する。gcloudの資格情報は`google:gcloud`が都度渡すため`gcloud auth login`は使わない。
+- `gh auth login`と、プロファイルごとの`mise google:auth <profile>`を実行する。gcloudの資格情報は`google:gcloud`が都度渡すため`gcloud auth login`は使わない。
 - `~/.zshrc.local`を旧マシンから手動で移送する（chezmoi管理外のローカル拡張）。
 - 取引先スコープの設定は、1Passwordの取引先用Vaultから`op read`で手動復元する。
 - Claude Codeの非公開設定（`CLAUDE.md`・`settings.json`・一部skills）をprivateリポジトリから復元する。

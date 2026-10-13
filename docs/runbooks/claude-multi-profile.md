@@ -13,12 +13,12 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
   インストーラーが配置時にマージする。現在は未使用で、仕組みだけ残している。
 - chezmoi が書き込むのは `~/.config/claude-profile-config/<profile>/` まで。
   実プロファイル（`~/.claude`・`~/.config/claude/<name>`）はランタイム領域であり、
-  `mise run claude:install-profiles` だけが構成6項目
+  `mise claude:install-profiles` だけが構成6項目
   （`settings.json`・`CLAUDE.md`・`rules`・`keybindings.json`・`commands`・`skills`）を差し替える。
 - インストーラーは全体実行では Claude の全終了を検査し、旧構成を
   `~/.config/claude/.migration-backups/` へ退避してから mv で差し替える。
   途中で失敗すると差し替え済みの項目を自動で書き戻す。
-- `mise run claude:install-profiles -- <名前>` でプロファイルを絞り込める。
+- `mise claude:install-profiles -- <名前>` でプロファイルを絞り込める。
   絞り込み時は全終了の代わりに、対象配下を開いているプロセスが無いことを検査する
   （explicitEnv=false のプロファイルは全体実行でのみ差し替える）。
 
@@ -28,7 +28,7 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 2. `home/dot_config/claude-profile-config/<name>/` に薄いラッパー4本を置く
    （`private_settings.json.tmpl`・`CLAUDE.md`・`symlink_rules.tmpl`・`symlink_keybindings.json.tmpl`）。
 3. `chezmoi apply ~/.config/claude-profile-config` で生成し、
-   `mise run claude:install-profiles -- <名前>` → `mise run claude:sync-links`。
+   `mise claude:install-profiles -- <名前>` → `mise claude:sync-links`。
    新設プロファイルだけなら Claude を終了せずに配置できる。
 4. 対象ディレクトリの mise.toml の `[env]` に `CLAUDE_CONFIG_DIR` を書く。
    direnv の `.envrc` には書かない。direnv の注入はプロンプト表示時のフックに頼るため、
@@ -53,7 +53,7 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 - 鍵が要る CLI は `~/.local/libexec/keywrap/` のラッパー経由で実行の瞬間だけ読む
   （mise グローバル `[env] _.path` がツールパスより前に置く）。
 - Codex CLI の MCP は `~/.codex/config.toml` の `http_headers_helper` に同じ headersHelper を
-  指定して鍵を注入する（keywrap は使わない）。plugin は `mise run codex:restore` が導入する。
+  指定して鍵を注入する（keywrap は使わない）。plugin は `mise codex:restore` が導入する。
 - `.zshenv` は `CLAUDECODE=1` のシェルで台帳の全変数を unset し、MULTIOS を無効化する（保険層）。
 - Claude Code の settings は `~/.config/secrets` の読み取りを deny する。
   sandbox は **enabled=false で待機**（2026-08-31、運用影響が大きくユーザー判断で
@@ -96,7 +96,7 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
     読めない（設計どおり。エージェントは firecrawl MCP を使い、CLI は人間用）。
 - 鍵のローテーション: 1Password の値を更新 → `chezmoi apply`。MCP の再登録は不要
   （headersHelper が次の接続で新しい値を読む）。
-- 検査: `mise run claude:secrets-audit` が mise env・新シェル・ファイル権限・helper（raw と
+- 検査: `mise claude:secrets-audit` が mise env・新シェル・ファイル権限・helper（raw と
   Bearer）を、値を表示せずに確認する。検査は1か所でなく、各プロファイルの作業ディレクトリ
   （mise コンテキスト）ごとに実行する。**人間の端末で実行すること**: エージェントの
   sandbox 内からは ~/.config/secrets に一切触れないため、ファイル権限と helper の
@@ -113,7 +113,7 @@ personal / hucom-system / hucom / client の4プロファイルへ切り替え�
 
 - 公開できるスキルは `~/.config/claude/_shared/skills/`（chezmoi 管理）、
   公開できないスキルは `~/.config/claude/_private/skills/`（非公開リポジトリ）に置く。
-- 置いたら `mise run claude:sync-links` を実行する。宣言（`excludeSkills`）に従って
+- 置いたら `mise claude:sync-links` を実行する。宣言（`excludeSkills`）に従って
   各プロファイルへシンボリックリンクで配られる。
 
 ## 切り替えが効かないときの調べ方
@@ -144,13 +144,13 @@ env -u CLAUDE_CONFIG_DIR claude auth status           # personal の認証を確
    親ディレクトリ（例: `~/.local/libexec`）を対象にするか、先に `mkdir -p` する
 5. `~/.agents/skills` を Skillsfile の復元タスクで先に揃える（`claude:sync-links` の配布元）
 6. 公開・非公開スキルの実行時依存を `bun install` で復元する
-7. `mise run claude:install-profiles` で構成を実プロファイルへ配置する
+7. `mise claude:install-profiles` で構成を実プロファイルへ配置する
    （`_private/profile-overlays/` もここでマージされる）
-8. `mise run claude:sync-links` でスキルを配る
+8. `mise claude:sync-links` でスキルを配る
 9. `mise trust` を実行する
 10. 取引先ディレクトリの配置物（mise.toml・settings.local.json）は
     手順4の `chezmoi apply` が submodule 経由で配る。追加の手作業は不要
 11. 各プロファイルで `/login` する
-12. `mise run claude:restore` を実行する
+12. `mise claude:restore` を実行する
 13. 取引先向け local スコープのプラグインは宣言の外にある。
     入れ直しの手順は `_private/notes/new-machine.md` を参照する

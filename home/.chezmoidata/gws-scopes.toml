@@ -1,5 +1,5 @@
 # gws auth login --scopes に渡す全量リスト。google:auth が ~/.config/gws/<profile>/scopes を読む。
-# gws は --scopes を指定内容で置換するため、追加するときはここに足して mise run google:auth <profile> を再実行する。
+# gws は --scopes を指定内容で置換するため、追加するときはここに足して mise google:auth <profile> を再実行する。
 # scopes を置かないプロファイル（personal など）は gws の既定（対話選択）で入る。
 # Google Cloud のスコープ（cloud-platform に限らず pubsub・bigquery などのサービス別のものも）は入れない。
 # 入れると gws のトークンが Google Cloud セッション制御の再認証ポリシーの対象になり、設定した頻度で invalid_rapt により切れる（hucom-system/company#247）。

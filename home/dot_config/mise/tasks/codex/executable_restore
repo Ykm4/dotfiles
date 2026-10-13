@@ -60,6 +60,6 @@ for plugin in "${PLUGINS[@]}"; do
 done
 
 if [ "$rc" -ne 0 ]; then
-  echo "未完了の項目がある。原因を直して mise run codex:restore を再実行すること" >&2
+  echo "未完了の項目がある。原因を直して mise codex:restore を再実行すること" >&2
 fi
 exit "$rc"

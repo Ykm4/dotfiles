@@ -35,7 +35,7 @@ run = 'skills find ${usage_query:+"$usage_query"}'
 alias = "skf"
 
 # スキルをグローバルにインストール
-# 例: mise run agent-skills:add cloudflare/skills -s wrangler
+# 例: mise agent-skills:add cloudflare/skills -s wrangler
 # depends_post: スキル構成が変わるたびに Skillsfile を再生成し、dotfiles との同期漏れを防ぐ。
 [tasks."agent-skills:add"]
 description = "スキルパッケージをグローバルに追加する"

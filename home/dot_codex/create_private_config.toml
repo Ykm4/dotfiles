@@ -3,7 +3,7 @@
 # [notice]・[tui.model_availability_nux]・[marketplaces]・[plugins] 等の実行時状態を追記して育てるため、
 # 既存ファイルには干渉しない。雛形を変えたときの既存マシンへの反映は手動で行う。
 # 取引先固有のパス・MCP はこの雛形に書かない。
-# plugin と marketplace は mise run codex:restore が導入する（Codex が [marketplaces]・[plugins] を書く）。
+# plugin と marketplace は mise codex:restore が導入する（Codex が [marketplaces]・[plugins] を書く）。
 # 全体向けの指示は同じディレクトリの AGENTS.md（dotfiles 管理）にある。
 
 model = "gpt-6.1-sol"
@@ -48,7 +48,7 @@ status_line = ["model-with-reasoning", "context-remaining", "current-dir", "mode
 [tui.keymap.editor]
 insert_newline = ["shift-enter", "alt-enter"]
 
-# skills。~/.agents/skills（skills CLI の正本。mise run agent-skills:restore で復元）は Codex が自動探索する。
+# skills。~/.agents/skills（skills CLI の正本。mise agent-skills:restore で復元）は Codex が自動探索する。
 # ~/.codex/skills には置かない（~/.agents/skills と重複するため）。
 # cloudflare plugin が agents-sdk・durable-objects・wrangler を同梱するので、~/.agents/skills 側はパス指定で無効化する。
 [[skills.config]]

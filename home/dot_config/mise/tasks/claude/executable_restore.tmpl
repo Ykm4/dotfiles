@@ -97,6 +97,6 @@ fi
 {{ end }}
 
 if [ "$rc" -ne 0 ]; then
-  echo "未完了または不一致の項目がある。認証後に mise run claude:restore を再実行すること" >&2
+  echo "未完了または不一致の項目がある。認証後に mise claude:restore を再実行すること" >&2
 fi
 exit "$rc"

@@ -67,17 +67,17 @@ bash ~/other/dotfiles/home/.chezmoiscripts/run_after_90-gcloud-install.sh
 導入後、プロファイルごとに認証する。
 
 ```bash
-mise run google:auth <profile>
+mise google:auth <profile>
 ```
 
 ## 更新
 
-`mise run tools:update`の中で`gcloud:upgrade`が`gcloud components update --quiet`を実行する。
+`mise tools:update`の中で`gcloud:upgrade`が`gcloud components update --quiet`を実行する。
 単体なら次のとおり。
 
 ```bash
-mise run gcloud:upgrade   # 更新
-mise run gcloud:check     # 状態の表示のみ
+mise gcloud:upgrade   # 更新
+mise gcloud:check     # 状態の表示のみ
 ```
 
 bootstrapスクリプトに書いてあるバージョンとSHAはseed用なので、毎リリースに追随する必要はない。

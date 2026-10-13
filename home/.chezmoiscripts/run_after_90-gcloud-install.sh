@@ -68,4 +68,4 @@ mkdir -p "$(dirname "$sdk_root")"
 mv "$tmp/google-cloud-sdk" "$sdk_root"
 
 echo "[gcloud-install] 導入した: $sdk_root" >&2
-echo "  認証は mise run google:auth <profile> で行う。" >&2
+echo "  認証は mise google:auth <profile> で行う。" >&2

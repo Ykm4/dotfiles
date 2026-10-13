@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="gws と gcloud の認証状態をまとめて表示する（秘密は出さない）"
 # 再認証が要るかどうかを1画面で判断するためのタスクである。
-# gws 側の token_valid が false なら mise run google:auth <profile> を実行する。
+# gws 側の token_valid が false なら mise google:auth <profile> を実行する。
 set -uo pipefail
 
 printf '=== gws（資格情報の正本）===\n'
@@ -34,7 +34,7 @@ else
     p=$(basename "${cfg}")
     gdir="${HOME}/.config/gcloud/${p}"
     if [ ! -d "${gdir}" ]; then
-      printf '  %s\n    未作成（mise run google:gcloud-login %s で作る）\n' "${p}" "${p}"
+      printf '  %s\n    未作成（mise google:gcloud-login %s で作る）\n' "${p}" "${p}"
       continue
     fi
     # 環境の CLOUDSDK_ACTIVE_CONFIG_NAME（傘の mise が設定）は外し、ディレクトリ側の既定 configuration を見る
@@ -47,5 +47,5 @@ else
   fi
 fi
 
-printf 'ローカル gcloud の再認証は mise run google:gcloud-login <profile> を実行する。\n'
-printf '再認証が要るときは mise run google:auth <profile> を実行する。\n'
+printf 'ローカル gcloud の再認証は mise google:gcloud-login <profile> を実行する。\n'
+printf '再認証が要るときは mise google:auth <profile> を実行する。\n'

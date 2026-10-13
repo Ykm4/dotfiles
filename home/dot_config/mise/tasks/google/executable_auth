@@ -6,8 +6,8 @@
 # scopes が無いプロファイル（personal など）は gws の既定（対話選択）で入る。
 # gcloud はこのタスクの対象外で、ローカル gcloud の認証は google:gcloud-login が担う。
 #
-# 使い方: mise run google:auth [profile]
-#   例: mise run google:auth personal
+# 使い方: mise google:auth [profile]
+#   例: mise google:auth personal
 set -euo pipefail
 
 profile="${1:-hucom-system}"

@@ -5,8 +5,8 @@
 # 初回は旧共有ストア（~/.config/gcloud 直下）に同名の configuration があれば account と project を引き継ぐ。
 # GCP の操作はローカル gcloud で行うので、このログインがその前提になる。
 #
-# 使い方: mise run google:gcloud-login [profile] [project]
-#   例: mise run google:gcloud-login hucom-system
+# 使い方: mise google:gcloud-login [profile] [project]
+#   例: mise google:gcloud-login hucom-system
 set -euo pipefail
 
 profile="${1:-hucom-system}"
