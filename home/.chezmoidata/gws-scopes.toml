@@ -1,6 +1,7 @@
 # gws auth login --scopes に渡す全量リスト。google:auth が ~/.config/gws/<profile>/scopes を読む。
 # gws は --scopes を指定内容で置換するため、追加するときはここに足して mise google:auth <profile> を再実行する。
-# scopes を置かないプロファイル（personal など）は gws の既定（対話選択）で入る。
+# full は Workspace の hucom-system・hucom が使い、personal は個人 Gmail 用の personal を使う。
+# scopes を置かないプロファイルは gws の既定（対話選択）で入る。
 # Google Cloud のスコープ（cloud-platform に限らず pubsub・bigquery などのサービス別のものも）は入れない。
 # 入れると gws のトークンが Google Cloud セッション制御の再認証ポリシーの対象になり、設定した頻度で invalid_rapt により切れる（hucom-system/company#247）。
 # GCP 操作はローカル gcloud が担う。pubsub を外したため、Pub/Sub を使う gws gmail +watch と gws events は使えない。
@@ -28,4 +29,19 @@ full = [
   "https://www.googleapis.com/auth/chat.spaces",
   "https://www.googleapis.com/auth/chat.memberships",
   "https://www.googleapis.com/auth/chat.messages",
+]
+# 個人 Gmail アカウントなので、Workspace 向けの admin.reports・chat・pubsub などは含めない。
+personal = [
+  "openid",
+  "email",
+  "profile",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/presentations",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/tasks",
 ]
