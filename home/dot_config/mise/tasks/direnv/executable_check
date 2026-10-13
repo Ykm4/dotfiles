@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="direnv が zsh のプロンプト表示時（precmd）に .envrc を読み込むかを、インストール済みの版と mise から見た最新版で実際に検査する（報告のみ）"
 #MISE wait_for=["mise:upgrade:global"]
-# 経緯と、固定を外す手順は config.toml の [tools] の direnv のコメントにある。
+# 経緯と、固定・固定解除の手順は config.toml の [tools] の direnv のコメントにある。
 # 固定中は最新版で不具合が直ったか（固定を外せるか）を判定し、固定を外した後は更新による退行を検知する。
 # 判定は上流のソースや変更履歴を読まず、実物のバイナリを動かして行う。
 # 上流の直し方（判定の書き換えや関数の分割など）に左右されずに判定するためである。
