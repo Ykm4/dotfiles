@@ -46,6 +46,10 @@ brew "imagemagick"
 brew "lazygit"
 # Polyglot runtime manager (asdf rust clone)
 brew "mise"
+# Cryptography and SSL/TLS Toolkit
+# 以前は python@3.14 などの依存として入っていた。
+# mise タスクやスクリプトが openssl コマンドを直接使うため、brew autoremove で消えて /usr/bin/openssl（LibreSSL）へ切り替わらないよう明示する。
+brew "openssl@4"
 # Process manager for Procfile-based applications and tmux
 brew "overmind"
 # Execute binaries from Python packages in isolated environments
