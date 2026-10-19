@@ -21,14 +21,14 @@ Ghostty設定ファイルを管理するスキル。cmuxはGhosttyベースで�
 ## ユーザーの好み
 
 - ダーク: `GitHub Dark Dimmed`
-- ライト: `Gruvbox Light`
+- ライト: `Gruvbox Material Light`（「明るいテーマに変更」と言われたらこれを適用する。Gruvbox Light・Gruvbox Light Hard・iTerm2 Solarized Light と見比べて選んだ 2026-10-15）
 
 ## 使い方
 
 ```bash
 scripts/ghostty-config.sh get theme            # 設定値を表示
 scripts/ghostty-config.sh set font-size 11     # 設定値を変更
-scripts/ghostty-config.sh theme "Gruvbox Light"
+scripts/ghostty-config.sh theme "Gruvbox Material Light"
 scripts/ghostty-config.sh list gruvbox         # テーマ検索（パターン省略で全件）
 scripts/ghostty-config.sh reload               # 設定を反映
 ```
