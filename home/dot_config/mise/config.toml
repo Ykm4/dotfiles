@@ -215,8 +215,7 @@ mise prune --yes ${tools}
 '''
 
 # 更新フェーズ（[2]〜[4]）の集約タスク。更新タスクを増やすときはここへ足すだけにする。
-# mise:prune と brew:cask:check はこれを wait_for に取ることで、tools:update 実行時に
-# 全更新の完了後へ順序づけられる（単体実行や brew:update では存在しないので待ちは発生しない）。
+# mise:prune・brew:cask:check・pre-commit:refresh・npm:cache:verify はこれを wait_for に取ることで、tools:update 実行時に全更新の完了後へ順序づけられる（単体実行や brew:update では存在しないので待ちは発生しない）。
 # brew:cleanup は depends で brew:cask:check の後に続く。
 [tasks."tools:updaters"]
 description = "全更新タスクを集約する（tools:update 用）"
@@ -240,12 +239,16 @@ depends = [
 #                                                           … mise 管理のツールを使う更新と、呼び出した場所のプロジェクト設定の [tools] の更新
 #       direnv:check                                        … direnv の .envrc 読み込みの検査（報告のみ。固定を外せるかと、更新による退行を知らせる）
 #   [5] mise:prune + brew:cask:check → brew:cleanup         … 掃除（mise 側は宣言済みツールだけ。Homebrew 側は Caskroom の破損検査を通ってから）
+#       mise:prune → pre-commit:refresh                     … pre-commit のフックを残った版で入れ直し、参照されなくなった展開物を削除する
+#       npm:cache:verify                                    … npm のキャッシュから、索引に無い中身を削除する（pnpm の store を掃除しない理由は conf.d/node.toml）
 [tasks."tools:update"]
-description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・gcloud components・textlint・Python 版 playwright を更新後、参照されなくなった版とキャッシュを掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）。あわせて direnv の .envrc 読み込みを検査する"
+description = "brew・mise ツール（グローバルと呼び出した場所のプロジェクト）・agent skills・gh 拡張・gcloud components・textlint・Python 版 playwright を更新後、pre-commit のフックを入れ直し、参照されなくなった版とキャッシュ（pre-commit・npm を含む）を掃除する（mise は宣言済みツールだけ。5 フェーズ DAG）。あわせて direnv の .envrc 読み込みを検査する"
 depends = [
     "tools:updaters",
     "mise:prune",
     "brew:cleanup",
+    "pre-commit:refresh",
+    "npm:cache:verify",
     "mise:undeclared",
     "direnv:check",
 ]

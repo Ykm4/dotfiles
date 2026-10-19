@@ -1,0 +1,18 @@
+# ============================================================
+# Node.js のパッケージマネージャのキャッシュ掃除
+# ============================================================
+# tools:update の掃除の段（全更新タスクの完了後）で、参照されなくなったキャッシュだけを削除する。
+# 失敗しても警告を出すだけで終了コードは 0 にする。同じ段で動く mise:prune や brew:cleanup を止めないためである。
+#
+# pnpm store prune は入れない。
+# このマシン（APFS）では pnpm が node_modules へ store のファイルを複製で置くため、store 側のファイルのリンク数は 1 のままになる。
+# 2026-10-18 に、登録済みで lockfile も最新の company が使うパッケージを含め、pnpm 12 の prune が store の 695 パッケージをすべて削除した。
+# 既存の node_modules は複製なので壊れないが、以後の install（worktree の作成を含む）がすべて再取得になる。
+
+[tasks."npm:cache:verify"]
+description = "npm のキャッシュの整合性を検査し、どの索引からも参照されていない中身を削除する"
+# wait_for: tools:update では全更新タスク（tools:updaters）の完了後に動かす。
+wait_for = ["tools:updaters"]
+# 削除の判定は索引（index-v5）に基づくので、索引から引ける中身は消えない。
+# 2026-10-18 の2回目の実行で消えたのは1件だけだった。
+run = "npm cache verify || echo '警告: npm cache verify が失敗した。' >&2"
