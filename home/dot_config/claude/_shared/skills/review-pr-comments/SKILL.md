@@ -11,11 +11,12 @@ allowed-tools:
   - Bash(git diff *)
   - Bash(git log *)
   - Bash(jq *)
-  # スキル本体は _shared 配下が実体で、各プロファイルと ~/.claude から symlink される。
-  # 呼び出し時の literal path はどれになるか決まらないため 3 形態すべてを許可する。
+  # スキル本体は _shared 配下が実体で、既定の ~/.claude と取引先プロファイルから symlink される。
+  # 呼び出し時の literal path はどれになるか決まらないため全形態を許可する。
   - Bash(/Users/ykm4/.claude/skills/review-pr-comments/scripts/*)
   - Bash(/Users/ykm4/.config/claude/_shared/skills/review-pr-comments/scripts/*)
-  - Bash(/Users/ykm4/.config/claude/hucom-system/skills/review-pr-comments/scripts/*)
+  - Bash(/Users/ykm4/.config/claude/client/skills/review-pr-comments/scripts/*)
+  - Bash(/Users/ykm4/.config/claude/hucom/skills/review-pr-comments/scripts/*)
   - Read
   - Edit
   - Write
