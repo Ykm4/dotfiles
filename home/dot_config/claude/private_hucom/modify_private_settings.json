@@ -1,0 +1,2 @@
+{{- /* chezmoi:modify-template */ -}}
+{{ includeTemplate "claude/render-settings" (dict "extra" "work/hucom/.chezmoitemplates/hucom/settings-extra.json" "stdin" .chezmoi.stdin "root" .) }}

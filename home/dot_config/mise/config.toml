@@ -11,11 +11,13 @@
 # keywrap: 鍵が要る CLI のラッパー置き場。_.path はツールパスより前に来るため、
 # mise 管理の実体（npm:firecrawl-cli 等）より先に解決される。
 # FIRECRAWL_KEY_FILE / FIRECRAWL_KEY_VAR は「鍵ファイルのパスと変数名」だけで値ではない。
-# 既定は personal で、各作業ツリーの mise.toml がプロファイルに応じて上書きする。
+# 既定は hucom-system で、各作業ツリーの mise.toml がプロファイルに応じて上書きする。
 [env]
 _.path = ["{{env.HOME}}/.local/libexec/keywrap"]
-FIRECRAWL_KEY_FILE = "{{env.HOME}}/.config/secrets/claude/personal.env"
-FIRECRAWL_KEY_VAR = "FIRECRAWL_API_KEY"
+# Claude Code の既定プロファイルは ~/.claude（CLAUDE_CONFIG_DIR 未設定。GUI 起動でも同じになる）。
+# 取引先の作業ツリーだけ、client-dotfiles が配る mise.toml が CLAUDE_CONFIG_DIR を設定する。
+FIRECRAWL_KEY_FILE = "{{env.HOME}}/.config/secrets/claude/hucom-system.env"
+FIRECRAWL_KEY_VAR = "FIRECRAWL_API_KEY_HUCOM_SYSTEM"
 # 注意: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB は設定しない。2026-08-31 に「=1 だと
 # Claude Code が settings の permissions.defaultMode: auto を読む前に manual へ
 # 黙って強制する」ことがバイナリ解析で判明し撤去した。サブプロセスからの
@@ -114,7 +116,7 @@ jq = "latest"
 # 取引先のチームのスクリプトが環境ごとの .envrc で使う。
 # 2.38.0〜2.38.1 は、zsh のプロンプト表示時（precmd）に .envrc を読み込まなかった（PR #1583 の退行。2.38.2 の #1634 で修正）。
 # 2026-10-07 にこの退行で、cmux の新しいタブで起動した Claude Code が CLAUDE_CONFIG_DIR を受け取れなかったため、2026-10-13 まで 2.37.1 に固定していた。
-# プロファイルの注入は同日に mise の [env] へ移した（docs/runbooks/claude-multi-profile.md の手順4）。
+# プロファイルの注入は同日に mise の [env] へ移し、2026-10-19 に既定を ~/.claude へ移してグローバルの注入は撤去した。
 # Homebrew では旧版を入れられないため、brew の formula は Brewfile から外し、mise（aqua backend）で管理する。
 # tools:update から毎回呼ばれる direnv:check が、更新による同種の退行を検知する。
 # 退行が出たら読み込める版に固定し、direnv:check が「固定を外せる」と出したら "latest" に戻す。

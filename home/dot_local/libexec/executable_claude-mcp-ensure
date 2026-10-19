@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Claude Code の MCP 登録を 1 件ずつ「無ければ登録」する（存在保証のみ。名前が一致すれば URL やヘッダの差異は見ない）。
+# CLAUDE_CONFIG_DIR は呼び出し側（各プロファイルの claude:restore タスクと mise の [env]）が決める。
+# 使い方:
+#   claude-mcp-ensure [--check] helper   <name> <url> <headersHelper のパス>
+#   claude-mcp-ensure [--check] oauth    <name> <url> <client-id> <callback-port>
+#   claude-mcp-ensure [--check] url-file <name> <env ファイル> <変数名>   # URL 自体が秘密のとき。0600 の env から登録時だけ読む
+# --check は登録せず、無ければ 1 で終わる。
+# 秘密の扱い: API キーは headersHelper が接続の瞬間に読む。値をここで扱わず、表示もしない。
+set -euo pipefail
+
+check=0
+if [ "${1:-}" = "--check" ]; then check=1; shift; fi
+[ $# -ge 2 ] || { sed -n '2,8p' "$0" >&2; exit 2; }
+kind=$1 name=$2; shift 2
+
+if claude mcp get "$name" >/dev/null 2>&1; then
+  echo "mcp ok: $name"; exit 0
+fi
+if [ "$check" = 1 ]; then
+  echo "mcp missing: $name（mise run claude:restore で登録する）" >&2; exit 1
+fi
+
+case "$kind" in
+  helper)
+    url=$1 helper=$2
+    [ -x "$helper" ] || { echo "headersHelper が無い（chezmoi apply を先に実行する）: $helper" >&2; exit 1; }
+    claude mcp add-json --scope user "$name" \
+      "$(jq -cn --arg url "$url" --arg hh "$helper" '{type:"http",url:$url,headersHelper:$hh}')"
+    ;;
+  oauth)
+    url=$1 client_id=$2 port=$3
+    claude mcp add --scope user --transport http --client-id "$client_id" --callback-port "$port" "$name" "$url"
+    echo "  認証は対話ターミナルで実行する: claude mcp login $name"
+    ;;
+  url-file)
+    file=$1 var=$2
+    { [ -f "$file" ] && [ ! -L "$file" ] && [ "$(/usr/bin/stat -f '%Lp' "$file")" = "600" ]; } \
+      || { echo "秘密ファイルが無いか権限が 0600 でない: $file" >&2; exit 1; }
+    url=$({ grep -m1 "^$var=" "$file" || :; } | cut -d= -f2-)
+    [ -n "$url" ] || { echo "$var を $file から読めない" >&2; exit 1; }
+    claude mcp add --scope user --transport http "$name" "$url"
+    ;;
+  *) echo "未知の種類: $kind" >&2; exit 2 ;;
+esac
+echo "mcp added: $name"

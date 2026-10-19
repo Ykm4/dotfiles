@@ -1,3 +1,15 @@
+{{- /*
+  Claude Code の settings.json の基底（全プロファイル共通）。
+  各プロファイルの modify_private_settings.json が claude/render-settings 経由でこれを読み、差分 JSON を重ねる。
+  変更はこのファイル 1 か所で 3 プロファイルに届く。sandbox.credentials.envVars だけは秘密台帳から起こす。
+*/ -}}
+{{- $client := dict -}}
+{{- if hasKey . "clientSecretsLedger" }}{{ $client = .clientSecretsLedger }}{{ end -}}
+{{- $ledger := merge (dict) .secretsLedger $client -}}
+{{- $names := list -}}
+{{- range $p, $svcs := $ledger }}{{ range $svc, $s := $svcs }}{{ range $s.vars }}{{ $names = append $names .name }}{{ end }}{{ end }}{{ end -}}
+{{- $envVars := list -}}
+{{- range $names | uniq | sortAlpha }}{{ $envVars = append $envVars (dict "name" . "mode" "deny") }}{{ end -}}
 {
   "cleanupPeriodDays": 20,
   "env": {
@@ -132,18 +144,151 @@
       "Bash(gws gmail +forward*)",
       "Bash(gws gmail users * send*)"
     ],
-    "defaultMode": "auto"
+    "defaultMode": "auto",
+    "additionalDirectories": [
+      "~/.claude/",
+      "~/.config/claude/",
+      "~/.agents/skills/",
+      "~/.config/mise/"
+    ]
   },
-  "language": "Japanese",
+  "model": "fable",
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.config/claude/_shared/scripts/cmux-notify.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.config/claude/_shared/scripts/deny-generated-config-edit.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.config/claude/_shared/scripts/cmux-notify.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bun run ~/.config/claude/_shared/statusline.ts",
+    "padding": 2
+  },
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "diagram-design@diagram-design": true,
+    "ponytail@ponytail": true,
+    "slack@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "diagram-design": {
+      "source": {
+        "source": "github",
+        "repo": "cathrynlavery/diagram-design"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      },
+      "autoUpdate": true
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      },
+      "autoUpdate": true
+    }
+  },
   "outputStyle": "Concise",
+  "language": "Japanese",
+  "sandbox": {
+    "enabled": false,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowedDomains": [
+        "*"
+      ],
+      "allowUnixSockets": [
+        "/Users/ykm4/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+      ]
+    },
+    "filesystem": {
+      "allowWrite": [
+        "~/work/",
+        "~/other/",
+        "~/.config/gws/",
+        "~/.config/gh/",
+        "~/.config/gcloud/",
+        "~/.config/gemini/",
+        "~/.config/claude/_private/",
+        "~/.local/share/",
+        "~/.local/state/",
+        "~/.cache/",
+        "~/.npm/",
+        "~/.bun/",
+        "~/.codex/",
+        "~/Library/Caches/",
+        "~/Library/pnpm/",
+        "/private/tmp/",
+        "/tmp/"
+      ]
+    },
+    "credentials": {
+      "files": [
+        {
+          "path": "~/.config/secrets",
+          "mode": "deny"
+        }
+      ],
+      "envVars": {{ toJson $envVars }}
+    },
+    "enableWeakerNetworkIsolation": true
+  },
   "alwaysThinkingEnabled": true,
   "effortLevel": "xhigh",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "xhigh"
+    },
+    "claude-sonnet-5-5": {
+      "effortLevel": "xhigh"
+    }
+  },
   "awaySummaryEnabled": true,
   "autoUpdatesChannel": "latest",
   "minimumVersion": "2.1.76",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
+  "theme": "dark",
   "preferredNotifChannel": "ghostty",
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,

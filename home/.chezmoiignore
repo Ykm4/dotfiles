@@ -4,3 +4,12 @@
 
 # Finder のメタデータはソースに紛れ込んでも配備しない
 **/.DS_Store
+
+# 取引先プロファイルの差分は client-dotfiles（home/work/ の submodule）にある。submodule の無い checkout では配らない。
+# .chezmoiignore はサブディレクトリの .chezmoidata より先に評価されるため、データのキーではなくディレクトリの有無で判定する
+{{ if not (stat (joinPath .chezmoi.sourceDir "work" ".chezmoidata")) }}
+.config/claude/client
+.config/claude/client/**
+.config/claude/hucom
+.config/claude/hucom/**
+{{ end }}

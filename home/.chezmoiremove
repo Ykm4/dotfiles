@@ -1,0 +1,7 @@
+.config/claude-profile-config
+.config/claude-profile-config/**
+.config/mise/tasks/claude/install-profiles
+.config/mise/tasks/claude/sync-links
+.config/secrets/claude/personal.env
+.config/secrets/claude/helpers/personal-context7.sh
+.config/secrets/claude/helpers/personal-firecrawl.sh

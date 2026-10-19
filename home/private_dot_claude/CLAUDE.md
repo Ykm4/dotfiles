@@ -1,8 +1,8 @@
 @~/.config/claude/_private/CLAUDE-common.md
 
-## hucom-system プロファイル
+## 既定プロファイル（~/.claude）
 
-自社業務の作業ディレクトリで有効になる。取引先案件は取引先ごとの client プロファイルが担う。
+既定のプロファイル。取引先の作業ツリー（取引先ごとのプロファイルが担う）以外のすべてのディレクトリで有効になる。
 
 この配下では gws とローカルの gcloud も `hucom-system` に固定される。切り替えは mise が行うため、`gws-profile` を手で呼ばない。
 

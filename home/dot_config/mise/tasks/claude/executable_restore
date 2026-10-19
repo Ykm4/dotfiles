@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="hucom-system プロファイルの MCP 登録を揃える（存在保証のみ。-- --check で検査だけ）"
+# 取引先プロファイルの同名タスクは各作業ツリーの mise.toml（client-dotfiles が配る）にあり、その配下では mise がそちらを優先する。
+# 秘密の扱い: API キーは headersHelper が接続の瞬間に ~/.config/secrets/claude/hucom-system.env から読む。値はどこにも書かない。
+set -euo pipefail
+case "$*" in ""|--check) ;; *) echo "未知の引数: $*" >&2; exit 2 ;; esac
+
+unset CLAUDE_CONFIG_DIR  # 既定プロファイル（~/.claude）を対象にする
+H="$HOME/.config/secrets/claude/helpers"
+E="$HOME/.local/libexec/claude-mcp-ensure"
+rc=0
+"$E" "$@" helper context7 https://mcp.context7.com/mcp "$H/hucom-system-context7.sh" || rc=1
+"$E" "$@" helper firecrawl https://mcp.firecrawl.dev/v2/mcp "$H/hucom-system-firecrawl.sh" || rc=1
+"$E" "$@" helper google-dev-knowledge https://developerknowledge.googleapis.com/mcp "$H/hucom-system-google-dev-knowledge.sh" || rc=1
+exit $rc

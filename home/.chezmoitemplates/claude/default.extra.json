@@ -1,0 +1,42 @@
+{
+  "enabledPlugins": {
+    "cloudflare@cloudflare": true
+  },
+  "extraKnownMarketplaces": {
+    "cloudflare": {
+      "source": {
+        "source": "github",
+        "repo": "cloudflare/skills"
+      },
+      "autoUpdate": true
+    }
+  },
+  "autoMode": {
+    "environment": [
+      "### Org-wide",
+      "**Organization**: None configured",
+      "**Cloud provider(s)**: None configured",
+      "**Repository visibility**: Public — Ykm4/dotfiles (github.com)",
+      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: 1Password (values injected into dotfiles at `chezmoi apply` time; repository itself holds no secret values)",
+      "**Default / protected branches**: main (no rulesets or classic protection listed via gh)",
+      "**CI/CD deploy targets**: None configured",
+      "**Network posture**: None configured",
+      "**Source control**: The trusted repo (Ykm4/dotfiles on github.com) and its remote only — no additional orgs configured",
+      "**Trusted internal domains**: None configured",
+      "**Trusted cloud buckets**: None configured",
+      "**Key internal services**: None configured",
+      "**Internal package registry**: None configured",
+      "**Sensitive data locations & audiences**: 1Password vaults/items referenced by this repo's chezmoi templates (SSH keys, gcloud account/project values, partner/取引先 identifiers, Finicky routing identifiers) — never materialized into repo files; share only with the repo owner (Ykm4)",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: any namespace, host, or container whose name carries `prod` or `production` as a whole word or name segment",
+      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: software development (personal dotfiles / macOS environment management via chezmoi)",
+      "**Trusted repo**: Ykm4/dotfiles (public) — https://github.com/Ykm4/dotfiles.git; public visibility means only this repo's own work belongs here, and confidential/secret material (1Password-injected values, partner SSH keys, gcloud account/project identifiers) must never be committed regardless of visibility",
+      "**Org-specific CLIs**: chezmoi, mise, gws/gsw, gog, op (1Password CLI), gcloud, gh — used routinely for this dotfiles repo's own tooling",
+      "routine under Ykm4/dotfiles prefix: chezmoi apply/diff, mise run (mise r ...), git operations against origin (Ykm4/dotfiles)"
+    ]
+  }
+}

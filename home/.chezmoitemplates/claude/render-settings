@@ -1,0 +1,16 @@
+{{- /*
+  基底 claude/settings.json.tmpl に差分 JSON（.extra はソースディレクトリ home/ からの相対パス）を重ねて settings.json を描画する。
+  差分は非空の値で基底を上書きする（配列は丸ごと置換、false や空は書けない）。
+  配備先が既に持つ model・modelSettings（/model の選択）は保つ。
+  呼び出し: includeTemplate "claude/render-settings" (dict "extra" "<差分 JSON のパス>" "stdin" .chezmoi.stdin "root" .)
+  差分は include で読む。サブディレクトリの .chezmoitemplates はテンプレート名として登録されないため、includeTemplate は使えない。
+*/ -}}
+{{- $base := includeTemplate "claude/settings.json.tmpl" .root | fromJson -}}
+{{- $extra := include .extra | fromJson -}}
+{{- $want := merge $extra $base -}}
+{{- if .stdin -}}
+{{-   $cur := .stdin | fromJson -}}
+{{-   range list "model" "modelSettings" }}{{ if hasKey $cur . }}{{ $_ := set $want . (index $cur .) }}{{ end }}{{ end -}}
+{{- end -}}
+{{- /* Go の JSON 出力は < > & を \u00XX に逃がす。Claude Code は生のまま書き戻すので差分の雑音にならないよう戻す */ -}}
+{{ toPrettyJson $want | replaceAllRegex "\\\\u0026" "&" | replaceAllRegex "\\\\u003c" "<" | replaceAllRegex "\\\\u003e" ">" }}
