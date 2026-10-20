@@ -3,8 +3,9 @@
   呼び出し側: {{ includeTemplate "secrets-headers-helper.sh" (dict "profile" "<プロファイル>" "service" "<サービス>" "root" .) }}
   台帳: secretsLedger（公開側）+ clientSecretsLedger（client-dotfiles）を連結して読む。
   契約: Claude Code が MCP 接続・再接続時に実行し、stdout の JSON（ヘッダ名→値）を使う。
+  "output" "value" を渡すと JSON ではなくヘッダの値だけを出す（pnpm の tokenHelper 用）。
   秘密は ~/.config/secrets/claude/<プロファイル>.env（生の KEY=VALUE・0600）から行単位で読む。
-  値を stdout の JSON 以外（stderr 含む）へ出さない。失敗時は値を含まない診断で非0終了（fail-closed）。
+  値を stdout 以外（stderr 含む）へ出さない。失敗時は値を含まない診断で非0終了（fail-closed）。
 */ -}}
 {{- $client := dict -}}
 {{- if hasKey .root "clientSecretsLedger" }}{{ $client = .root.clientSecretsLedger }}{{ end -}}
@@ -18,6 +19,9 @@
 {{- if not $varFound }}{{ fail (printf "secrets-ledger: %s.%s の header.var が vars に無い" .profile .service) }}{{ end -}}
 {{- $mode := "raw" -}}
 {{- if eq $h.scheme "Bearer " }}{{ $mode = "bearer" }}{{ end -}}
+{{- $output := "json" -}}
+{{- if hasKey . "output" }}{{ $output = .output }}{{ end -}}
+{{- if and (ne $output "json") (ne $output "value") }}{{ fail (printf "secrets-headers-helper: output %q が不正" $output) }}{{ end -}}
 #!/bin/sh
 # 生成物: 編集しない。正本は dotfiles の .chezmoitemplates/secrets-headers-helper.sh と秘密台帳。
 # プロファイル: {{ .profile }} / サービス: {{ .service }}
@@ -135,6 +139,9 @@ case "$value_mode" in
         ;;
 esac
 
+{{ if eq $output "value" -}}
+printf '%s\n' "$header_value"
+{{- else -}}
 # 秘密を jq の argv に載せず stdin で渡す（ps からの覗き見を避ける）。
 if ! json=$(
     printf '%s' "$header_value" |
@@ -144,5 +151,6 @@ if ! json=$(
 fi
 
 printf '%s\n' "$json"
+{{- end }}
 unset secret_value header_value json value line
 exit 0
