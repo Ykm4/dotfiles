@@ -151,3 +151,45 @@ echo "== pin 済み（brew upgrade / brew bundle の対象外） =="
 # pin が1つも無くても正常終了するため握り潰さない。異常終了は監査の失敗として扱う。
 brew list --pinned --versions
 '''
+
+# eMudhra 侵害中間（2026-10-17 の事案）対策の追随検査。報告のみで、常に終了コード 0。
+# [1] /etc/ssl/cert.pem は Homebrew ca-certificates の Mozilla 由来の束のスナップショット（2026-10-25 に置換。AAA と emSign G3 の根を含まない）。
+#     brew が ca-certificates を上げても追随しないので、差分が出たら人が sudo で入れ直す
+#     （sudo はタスクから叩けない。理由は brew:upgrade:run のコメント）。
+# [2] keywrap/gws は gws が rustls-webpki 0.103.16 以降を同梱したら不要になる。ラッパーがある間だけ
+#     上流の Cargo.lock を 1 回取得して版を見る。経緯は docs/runbooks/claude-multi-profile.md の keywrap/gws の項。
+# wait_for: brew の貼り替え後に検査する。
+[tasks."brew:ca:check"]
+description = "eMudhra 対策の追随検査: /etc/ssl/cert.pem と Homebrew の Mozilla 由来の束の差分、gws 同梱 rustls-webpki の版（報告のみ）"
+wait_for = ["brew:upgrade:run"]
+run = '''
+bundle=/opt/homebrew/opt/ca-certificates/share/ca-certificates/cacert.pem
+if [ ! -r "${bundle}" ]; then
+  echo "WARN: ${bundle} が無い。brew install ca-certificates を実行すること。" >&2
+elif ! cmp -s /etc/ssl/cert.pem "${bundle}"; then
+  echo "WARN: /etc/ssl/cert.pem が Homebrew の Mozilla 由来の束と異なる。次で入れ直すこと（AAA と emSign G3 の根は再追加しない）:" >&2
+  echo "  sudo /usr/bin/install -S -m 0644 -o root -g wheel ${bundle} /etc/ssl/cert.pem" >&2
+else
+  echo "ok: /etc/ssl/cert.pem は Homebrew の Mozilla 由来の束と一致"
+fi
+
+wrapper="${HOME}/.local/libexec/keywrap/gws"
+if [ ! -x "${wrapper}" ]; then
+  echo "ok: keywrap/gws は無い（検査不要）"
+  exit 0
+fi
+ver="$(brew list --versions googleworkspace-cli 2>/dev/null | awk '{print $2}')"
+if [ -z "${ver}" ]; then
+  echo "WARN: googleworkspace-cli が brew に無いのに keywrap/gws が残っている。" >&2
+  exit 0
+fi
+webpki="$(curl -fsSL --max-time 20 "https://raw.githubusercontent.com/googleworkspace/cli/v${ver}/Cargo.lock" \
+  | awk '/^name = "rustls-webpki"$/ { getline; gsub(/"/, "", $3); print $3; exit }')"
+if [ -z "${webpki}" ]; then
+  echo "WARN: gws ${ver} の Cargo.lock を取得できない。rustls-webpki の版を手で確かめること。" >&2
+elif echo "${webpki}" | awk -F. '{ exit !($1 > 0 || ($1 == 0 && ($2 > 103 || ($2 == 103 && $3 >= 16)))) }'; then
+  echo "INFO: gws ${ver} は rustls-webpki ${webpki} を同梱。keywrap/gws（dotfiles の executable_gws）を削除できる。"
+else
+  echo "ok: gws ${ver} は rustls-webpki ${webpki}。keywrap/gws を維持"
+fi
+'''

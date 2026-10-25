@@ -247,6 +247,7 @@ depends = [
     "tools:updaters",
     "mise:prune",
     "brew:cleanup",
+    "brew:ca:check",
     "pre-commit:refresh",
     "npm:cache:verify",
     "mise:undeclared",
