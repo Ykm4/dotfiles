@@ -33,7 +33,7 @@ enabled = false
 # client secret を Codex が扱えないため入れない（gcloud はシェルで使う）。
 [mcp_servers.context7]
 url = "https://mcp.context7.com/mcp"
-http_headers_helper = "~/.config/secrets/claude/helpers/personal-context7.sh"
+http_headers_helper = "~/.config/secrets/claude/helpers/hucom-system-context7.sh"
 
 [mcp_servers.google-dev-knowledge]
 url = "https://developerknowledge.googleapis.com/mcp"
