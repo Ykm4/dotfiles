@@ -1,0 +1,22 @@
+#!/bin/sh
+# gws の TLS 信頼ストアを差し替えるラッパー（keywrap）。生成物: 編集しない。正本は dotfiles。
+# gws 0.22.5 は rustls-native-certs 0.8 でキーチェーンのルートを読み、同梱の rustls-webpki 0.103.10 には
+# eMudhra 侵害中間（2026-10-17 の事案）の拒否リストが無い。rustls-native-certs は SSL_CERT_FILE が
+# あればそれだけを読むので、Homebrew ca-certificates の Mozilla 由来の束（AAA と emSign G3 を除外済み）を指す。
+# 上流が rustls-webpki 0.103.16 以降を同梱した版を出したら、このラッパーは削除する。
+
+real_bin='/opt/homebrew/bin/gws'
+ca_file='/opt/homebrew/opt/ca-certificates/share/ca-certificates/cacert.pem'
+
+fail() {
+    printf '%s\n' "gws-keywrap: $1" >&2
+    exit 1
+}
+
+[ -x "$real_bin" ] ||
+    fail "real executable is unavailable: $real_bin"
+
+[ -r "$ca_file" ] ||
+    fail "CA bundle is unavailable: $ca_file（brew install ca-certificates）"
+
+exec /usr/bin/env -u SSL_CERT_DIR SSL_CERT_FILE="$ca_file" "$real_bin" "$@"

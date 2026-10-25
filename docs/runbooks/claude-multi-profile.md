@@ -71,6 +71,9 @@ chezmoi が素のファイルを実プロファイルへ直接配る形にした
   接続の瞬間に env ファイルからヘッダを生成する。環境変数にも MCP 設定にも値を置かない。
 - 鍵が要る CLI は `~/.local/libexec/keywrap/` のラッパー経由で実行の瞬間だけ読む
   （mise グローバル `[env] _.path` がツールパスより前に置く）。
+- `keywrap/gws` だけは鍵ではなく TLS 信頼ストアの差し替え（`SSL_CERT_FILE` を Homebrew の
+  Mozilla 由来の束へ向け、eMudhra 侵害中間を拒否する）。上流 gws が rustls-webpki 0.103.16
+  以降を同梱したら削除する（2026-10-25）。
 - Codex CLI の MCP は `~/.codex/config.toml` の `http_headers_helper` に同じ headersHelper を
   指定して鍵を注入する（keywrap は使わない）。plugin は `mise codex:restore` が導入する。
 - `.zshenv` は `CLAUDECODE=1` のシェルで台帳の全変数を unset し、MULTIOS を無効化する（保険層）。
