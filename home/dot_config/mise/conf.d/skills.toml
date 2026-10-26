@@ -16,12 +16,21 @@ description = "更新可能なスキルを確認する"
 run = "skills check -g"
 alias = "skck"
 
-# 全スキルを最新バージョンに更新（-g でグローバル限定、-y でスコーププロンプトをスキップ）
+# スクリプトを含むスキル（archify・skill-creator）を除いて、全スキルを最新バージョンに更新（-g でグローバル限定、-y でスコーププロンプトをスキップ）
+# 除く理由: スクリプトは分類器から呼び出しの1行しか見えないため、作者の乗っ取りで入った更新を読まずに取り込まない。この2件は差分を読んでから skills update -g <名前> で上げる。
 [tasks."agent-skills:update"]
-description = "インストール済みの全 agent skills を更新する"
+description = "スクリプトを含むもの（archify・skill-creator）を除いて agent skills を更新する"
 # wait_for: skills CLI 自体が mise 管理（npm:skills）のため、tools:update では mise:upgrade:global の完了後に実行する
 wait_for = ["mise:upgrade:global"]
-run = "skills update -g -y"
+run = '''
+set -eu
+names=$(jq -r '.skills | keys - ["archify", "skill-creator"] | .[]' "$HOME/.agents/.skill-lock.json")
+# 名前が空のまま渡すと全件の更新になるので止める。
+[ -n "$names" ] || exit 0
+# $names は複数スキル名を個別引数に分けるため、意図的にクオートしない。
+skills update -g -y $names
+echo "archify と skill-creator は更新していない。差分を読んでから skills update -g <名前> で上げる。"
+'''
 alias = "skup"
 
 # スキルを検索（引数なしでインタラクティブ検索）
