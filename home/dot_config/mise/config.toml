@@ -65,8 +65,12 @@ aube = "latest"
 # trust例外: cytoscape@3.34.1 はリードメンテナー本人の手動公開（GitHubリリース v3.34.1 と
 # 公開者・日時が一致、tarballサイズも連続）を2026-08-20に検証済み。provenanceなしのため
 # aubeのno-downgrade判定に掛かるが良性。次版がCI公開に戻れば例外は不要になる。
+# trust例外: chromium-bidi は 2026-09-30 の 157.0.8080-0 から Chrome の版番号に変わり、以降の全版が Google の chrome-devtools-npm による provenance なしの公開になった（10.6.1 までは GitHub Actions の Trusted Publishing）。
+# 1版だけの異常ではなく公開経路の移行と判断し、puppeteer-core 25.16.0 が版指定する 157.0.8090-0 だけを 2026-11-04 に除外した。
+# puppeteer が別の版を指定すると同じエラーが出るので、そのときは版を書き換える。
 "npm:@mermaid-js/mermaid-cli" = { version = "latest", trust_policy_excludes = [
   "cytoscape@3.34.1",
+  "chromium-bidi@157.0.8090-0",
 ] }
 
 # @see https://github.com/vercel-labs/agent-browser
