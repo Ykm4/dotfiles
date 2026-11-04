@@ -122,9 +122,6 @@
       "Bash(find * -exec *)",
       "Bash(find * -delete *)",
       "Bash(find * -execdir *)",
-      "Bash(git push)",
-      "Bash(git push * main)",
-      "Bash(git push *:main)",
       "Bash(gh api *merge*)",
       "Read(~/.config/*/env)",
       "Edit(~/.config/*/env)",
@@ -139,7 +136,13 @@
       "Bash(gws gmail +send*)",
       "Bash(gws gmail +reply*)",
       "Bash(gws gmail +forward*)",
-      "Bash(gws gmail users * send*)"
+      "Bash(gws gmail users * send*)",
+      "Bash(git push *release-*)",
+      "Bash(git push * v*)",
+      "Bash(git push *:v*)",
+      "Bash(git push *refs/tags/*)",
+      "Bash(git push *-tags*)",
+      "Bash(gh release create *)"
     ],
     "defaultMode": "auto",
     "additionalDirectories": [
