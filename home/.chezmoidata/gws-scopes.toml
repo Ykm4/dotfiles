@@ -29,6 +29,9 @@ full = [
   "https://www.googleapis.com/auth/chat.spaces",
   "https://www.googleapis.com/auth/chat.memberships",
   "https://www.googleapis.com/auth/chat.messages",
+  # Apps Script（見積書スプレッドシートの PDF 出力用スクリプトの作成と公開）。
+  "https://www.googleapis.com/auth/script.projects",
+  "https://www.googleapis.com/auth/script.deployments",
 ]
 # 個人 Gmail アカウントなので、Workspace 向けの admin.reports・chat・pubsub などは含めない。
 personal = [
