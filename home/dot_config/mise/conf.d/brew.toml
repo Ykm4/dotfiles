@@ -158,6 +158,7 @@ brew list --pinned --versions
 #     （sudo はタスクから叩けない。理由は brew:upgrade:run のコメント）。
 # [2] keywrap/gws は gws が rustls-webpki 0.103.16 以降を同梱したら不要になる。ラッパーがある間だけ
 #     上流の Cargo.lock を 1 回取得して版を見る。経緯は docs/runbooks/claude-multi-profile.md の keywrap/gws の項。
+#     awk は途中で exit せず最後まで読む（exit するとパイプが閉じて curl が「(56) Failure writing output」を出す）。
 # wait_for: brew の貼り替え後に検査する。
 [tasks."brew:ca:check"]
 description = "eMudhra 対策の追随検査: /etc/ssl/cert.pem と Homebrew の Mozilla 由来の束の差分、gws 同梱 rustls-webpki の版（報告のみ）"
@@ -184,7 +185,7 @@ if [ -z "${ver}" ]; then
   exit 0
 fi
 webpki="$(curl -fsSL --max-time 20 "https://raw.githubusercontent.com/googleworkspace/cli/v${ver}/Cargo.lock" \
-  | awk '/^name = "rustls-webpki"$/ { getline; gsub(/"/, "", $3); print $3; exit }')"
+  | awk '!v && /^name = "rustls-webpki"$/ { getline; gsub(/"/, "", $3); v = $3 } END { if (v != "") print v }')"
 if [ -z "${webpki}" ]; then
   echo "WARN: gws ${ver} の Cargo.lock を取得できない。rustls-webpki の版を手で確かめること。" >&2
 elif echo "${webpki}" | awk -F. '{ exit !($1 > 0 || ($1 == 0 && ($2 > 103 || ($2 == 103 && $3 >= 16)))) }'; then
